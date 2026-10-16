@@ -2912,32 +2912,59 @@ describe("stash label lifecycle and clicks (S61)", () => {
     expect(document.getElementById("commitDetails")).toBeNull();
   });
 
-  it.each([{ type: "click" }, { type: "dblclick" }])(
-    "stops a $type on the listed stash clone inside the list (TC-539, TC-540)",
-    ({ type }) => {
-      // Case: TC-539 (click) / TC-540 (dblclick)
-      // Given: stash A's clone in the list and a bubbling listener on the document
-      loadStashCommits(true);
-      const clone = listedStashClone(STASH_A);
-      const list = popups()[0];
-      const reachedDocument = vi.fn();
-      document.addEventListener(type, reachedDocument);
+  it("stops a click on the listed stash clone inside the list (TC-539)", () => {
+    // Case: TC-539
+    // Given: stash A's clone in the list and a bubbling listener on the document
+    loadStashCommits(true);
+    const clone = listedStashClone(STASH_A);
+    const list = popups()[0];
+    const reachedDocument = vi.fn();
+    document.addEventListener("click", reachedDocument);
 
-      // When: the clone receives the event
-      try {
-        fire(clone, type);
-      } finally {
-        document.removeEventListener(type, reachedDocument);
-      }
-
-      // Then: the event stopped in the list; no checkout, no details, no request
-      expect(reachedDocument).not.toHaveBeenCalled();
-      expect(popups()).toEqual([list]);
-      expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
-      expect(vscode.postMessage).not.toHaveBeenCalled();
-      expect(document.getElementById("commitDetails")).toBeNull();
+    // When: the clone is clicked
+    try {
+      fire(clone, "click");
+    } finally {
+      document.removeEventListener("click", reachedDocument);
     }
-  );
+
+    // Then: the event stopped in the list; no checkout, no details, no request
+    expect(reachedDocument).not.toHaveBeenCalled();
+    expect(popups()).toEqual([list]);
+    expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+    expect(document.getElementById("commitDetails")).toBeNull();
+  });
+
+  it("hands a dblclick on the listed stash clone to the checkout action (TC-540)", () => {
+    // Case: TC-540
+    // Given: stash A's clone in the list and a bubbling listener on the document
+    loadStashCommits(true);
+    const clone = listedStashClone(STASH_A);
+    const list = popups()[0];
+    const reachedDocument = vi.fn();
+    document.addEventListener("dblclick", reachedDocument);
+
+    // When: the clone is double-clicked
+    try {
+      fire(clone, "dblclick");
+    } finally {
+      document.removeEventListener("dblclick", reachedDocument);
+    }
+
+    // Then: the event stopped in the list and the shared action got the clone with its raw
+    // (absent) name and no further arguments; the list stays open, no details. The stub sends
+    // nothing, so the request count is not evidence that a stash cannot be checked out (TC-775).
+    expect(reachedDocument).not.toHaveBeenCalled();
+    expect(refMenu.checkoutBranchAction).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(refMenu.checkoutBranchAction).mock.calls[0];
+    expect(call).toHaveLength(3);
+    expect(call[1]).toBe(clone);
+    expect(call[2]).toBe(clone.dataset.name);
+    expect(popups()).toEqual([list]);
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+    expect(document.getElementById("commitDetails")).toBeNull();
+  });
 
   it("requests the stash details from a left click on the row body (TC-541)", () => {
     // Case: TC-541

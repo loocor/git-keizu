@@ -157,6 +157,8 @@ export interface RefOverflowOptions {
     ref: HTMLElement,
     focusOptions?: ContextMenuFocusOptions
   ) => void;
+  // Listed clones carry no in-row listener, so their double-clicks reach the owner through here.
+  readonly onRefDoubleClick: (event: MouseEvent, ref: HTMLElement) => void;
   // Listed clones are new elements, so the owner gives each one the focus key of its original.
   readonly onRefCloned?: (original: HTMLElement, clone: HTMLElement) => void;
 }
@@ -703,7 +705,7 @@ export class RefOverflowController {
     popup.setAttribute(REF_OVERFLOW_IGNORE_ATTRIBUTE, "");
     copyRowAppearance(popup, cell);
     popup.addEventListener("click", this.stopPropagation);
-    popup.addEventListener("dblclick", this.stopPropagation);
+    popup.addEventListener("dblclick", (event) => this.handlePopupDoubleClick(event, popup));
     popup.addEventListener("keydown", (event) => this.handlePopupKeydown(event, popup));
     this.popup = popup;
     this.popupCounter = counter;
@@ -755,6 +757,16 @@ export class RefOverflowController {
     if (this.popup !== popup) return;
     this.menuOrigin = clone;
     this.options.onRefContextMenu(event, clone, this.popupFocusOptions ?? undefined);
+  }
+
+  // The list sits outside the table, so the owner gets the clone itself and never the row's badge.
+  private handlePopupDoubleClick(event: MouseEvent, popup: HTMLElement): void {
+    event.stopPropagation();
+    if (this.popup !== popup) return;
+    if (!(event.target instanceof Element)) return;
+    const ref = event.target.closest<HTMLElement>(`.${CLASS_GIT_REF}`);
+    if (ref === null || !popup.contains(ref)) return;
+    this.options.onRefDoubleClick(event, ref);
   }
 
   private handlePopupKeydown(event: KeyboardEvent, popup: HTMLElement): void {

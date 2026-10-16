@@ -523,6 +523,7 @@ class GitKeizuView {
       onMinimumWidth: (minimum) => this.applyDescriptionMinimumWidth(minimum),
       onRefContextMenu: (event, badge, focusOptions) =>
         this.showRefBadgeContextMenu(event, badge, focusOptions),
+      onRefDoubleClick: (event, badge) => this.handleRefDoubleClick(event, badge),
       onRefCloned: (original, clone) => {
         const key = this.resolveRefKey(original);
         if (key !== null) markFocusTarget(clone, key);
@@ -1330,18 +1331,8 @@ class GitKeizuView {
     });
     addListenerToClass("gitRef", "click", (e: Event) => e.stopPropagation());
     addListenerToClass("gitRef", "dblclick", (e: Event) => {
-      e.stopPropagation();
-      if (isDialogActive()) hideDialog();
-      if (isContextMenuActive()) hideContextMenu();
-      let target = <HTMLElement>e.target;
-      let sourceElem = <HTMLElement>target.closest(REF_BADGE_SELECTOR)!;
-      if (sourceElem.classList.contains(DETACHED_WORKTREE_CLASS)) return;
-      const remoteElem = target.closest<HTMLElement>(COMBINED_REMOTE_SELECTOR);
-      if (remoteElem !== null && sourceElem.contains(remoteElem)) {
-        checkoutBranchAction(this.currentRepo, sourceElem, remoteElem.dataset.name!, true);
-      } else {
-        checkoutBranchAction(this.currentRepo, sourceElem, sourceElem.dataset.name!);
-      }
+      if (!(e instanceof MouseEvent) || !(e.currentTarget instanceof HTMLElement)) return;
+      this.handleRefDoubleClick(e, e.currentTarget);
     });
     // Attach after the listeners above so measurement clones never receive them.
     const tableElem = this.tableElem.querySelector("table");
@@ -1405,6 +1396,20 @@ class GitKeizuView {
     // child button that launched it, or to the row when the row itself is the tab stop.
     const source = target.closest<HTMLElement>("button") ?? fileRow;
     showContextMenu(event, items, source, this.getCurrentRepoRecentActions());
+  }
+  // In-row badges and listed clones share this path, so both double-clicks check out alike.
+  private handleRefDoubleClick(event: MouseEvent, ref: HTMLElement): void {
+    event.stopPropagation();
+    if (isDialogActive()) hideDialog();
+    if (isContextMenuActive()) hideContextMenu();
+    if (ref.classList.contains(DETACHED_WORKTREE_CLASS)) return;
+    if (!(event.target instanceof Element)) return;
+    const remoteElem = event.target.closest<HTMLElement>(COMBINED_REMOTE_SELECTOR);
+    if (remoteElem !== null && ref.contains(remoteElem)) {
+      checkoutBranchAction(this.currentRepo, ref, remoteElem.dataset.name!, true);
+    } else {
+      checkoutBranchAction(this.currentRepo, ref, ref.dataset.name!);
+    }
   }
   private showRefBadgeContextMenu(
     event: ContextMenuTrigger,

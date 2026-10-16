@@ -286,12 +286,19 @@ function createController(extra: Partial<RefOverflowOptions> = {}): {
   controller: RefOverflowController;
   onMinimumWidth: ReturnType<typeof vi.fn>;
   onRefContextMenu: ReturnType<typeof vi.fn>;
+  onRefDoubleClick: ReturnType<typeof vi.fn>;
 } {
   const onMinimumWidth = vi.fn();
   const onRefContextMenu = vi.fn();
-  const controller = new RefOverflowController({ onMinimumWidth, onRefContextMenu, ...extra });
+  const onRefDoubleClick = vi.fn();
+  const controller = new RefOverflowController({
+    onMinimumWidth,
+    onRefContextMenu,
+    onRefDoubleClick,
+    ...extra
+  });
   controllers.push(controller);
-  return { controller, onMinimumWidth, onRefContextMenu };
+  return { controller, onMinimumWidth, onRefContextMenu, onRefDoubleClick };
 }
 
 function setupTable(rows: readonly RowSpec[]) {
@@ -1532,10 +1539,12 @@ describe("RefOverflowController hidden-badge list", () => {
     expect(rowListener).not.toHaveBeenCalled();
   });
 
-  it("ignores click and dblclick on list items (TC-070)", () => {
-    // Case: TC-070 (AC-15)
+  it("forwards only a dblclick on a listed clone to the owner (TC-116)", () => {
+    // Case: TC-116 (replaces TC-070; AC-07, AC-10)
     // Given: an open list and bubbling listeners on the document and the row
-    const { table, onRefContextMenu } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const { table, onRefContextMenu, onRefDoubleClick } = setupTable([
+      { refs: ac01Refs(), head: true }
+    ]);
     const popup = openCounter(table);
     const documentListener = vi.fn();
     const rowListener = vi.fn();
@@ -1544,16 +1553,21 @@ describe("RefOverflowController hidden-badge list", () => {
     table.rows[1].addEventListener("click", rowListener);
     table.rows[1].addEventListener("dblclick", rowListener);
 
-    // When: a clone is clicked and double-clicked
+    // When: a clone is clicked, then double-clicked
     const clone = popup.children[0];
     click(clone);
-    click(clone, "dblclick");
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+    const dblclick = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+    clone.dispatchEvent(dblclick);
 
-    // Then: nothing handles them and the list stays open
+    // Then: only the dblclick reaches the owner, with the same event and clone; the list stays
+    // open. The spy sends nothing, so postMessage is not evidence about checkout here.
+    expect(onRefDoubleClick).toHaveBeenCalledTimes(1);
+    expect(onRefDoubleClick.mock.calls[0][0]).toBe(dblclick);
+    expect(onRefDoubleClick.mock.calls[0][1]).toBe(clone);
     expect(documentListener).not.toHaveBeenCalled();
     expect(rowListener).not.toHaveBeenCalled();
     expect(onRefContextMenu).not.toHaveBeenCalled();
-    expect(vscode.postMessage).not.toHaveBeenCalled();
     expect(popups()).toHaveLength(1);
     document.removeEventListener("click", documentListener);
     document.removeEventListener("dblclick", documentListener);
