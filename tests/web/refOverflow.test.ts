@@ -1574,6 +1574,174 @@ describe("RefOverflowController hidden-badge list", () => {
   });
 
   it.each([
+    { part: "button body", selector: '[data-name="main"] > button.gitRefButton' },
+    { part: "name", selector: '[data-name="main"] .gitRefName' },
+    { part: "icon", selector: '[data-name="main"] .codicon' },
+    { part: "search mark", selector: '[data-name="main"] .gitRefName .findMatch' },
+    { part: "combined remote child", selector: '[data-name="main"] .gitRefHeadRemote .findMatch' }
+  ])("forwards a dblclick on the $part to the nearest clone badge (TC-117)", (entry) => {
+    // Case: TC-117 (AC-09, AC-10)
+    // Given: a hidden combined badge with search marks in its name and its remote label
+    fixture.badgeOuter = { long: 900, main: 50 };
+    const { table, onRefDoubleClick } = setupTable([
+      { refs: headRef("long") + headRef("main", { remotes: ["origin"] }), head: true }
+    ]);
+    const cell = descriptionCell(table);
+    markName(cell, "main");
+    cell.querySelector('[data-name="main"] .gitRefHeadRemote')!.innerHTML =
+      '<span class="findMatch">ori</span>gin';
+    const popup = openCounter(table);
+    const target = popup.querySelector(entry.selector)!;
+    const event = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+
+    // When: the target is double-clicked
+    target.dispatchEvent(event);
+
+    // Then: the owner gets the same event and the nearest clone .gitRef, not the target itself
+    expect(onRefDoubleClick).toHaveBeenCalledTimes(1);
+    expect(onRefDoubleClick.mock.calls[0][0]).toBe(event);
+    expect(onRefDoubleClick.mock.calls[0][1]).toBe(popup.querySelector('[data-name="main"]'));
+    expect(onRefDoubleClick.mock.calls[0][1]).not.toBe(target);
+  });
+
+  it("forwards nothing for a dblclick on the list padding (TC-118)", () => {
+    // Case: TC-118 (AC-09)
+    // Given: an open list and a bubbling dblclick listener on the document
+    const { table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const popup = openCounter(table);
+    const documentListener = vi.fn();
+    document.addEventListener("dblclick", documentListener);
+
+    // When: the list container itself is double-clicked
+    try {
+      click(popup, "dblclick");
+    } finally {
+      document.removeEventListener("dblclick", documentListener);
+    }
+
+    // Then: no forward, nothing reached the document and the list stays
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+    expect(documentListener).not.toHaveBeenCalled();
+    expect(popups()).toEqual([popup]);
+  });
+
+  it("forwards nothing for a dblclick dispatched on a text node (TC-119)", () => {
+    // Case: TC-119 (AC-09)
+    // Given: an open list and the text node of a clone's name
+    const { table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const popup = openCounter(table);
+    const text = popup.querySelector('[data-name="wt-2"] .gitRefName')!.firstChild!;
+    expect(text.nodeType).toBe(Node.TEXT_NODE);
+    const onError = vi.fn();
+    window.addEventListener("error", onError);
+
+    // When: a bubbling dblclick is dispatched on the text node
+    try {
+      text.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    } finally {
+      window.removeEventListener("error", onError);
+    }
+
+    // Then: the non-Element target is ignored without an error and the list stays
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(popups()).toEqual([popup]);
+  });
+
+  it("forwards nothing from a kept clone after closePopup (TC-120)", () => {
+    // Case: TC-120 (AC-09)
+    // Given: a clone kept from a list that was closed programmatically
+    const { controller, table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const clone = openCounter(table).children[0];
+    expect(controller.closePopup()).toBe(true);
+
+    // When: the kept clone is double-clicked
+    click(clone, "dblclick");
+
+    // Then: no forward
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+  });
+
+  it("forwards nothing from the clone of a previous list after reopening (TC-121)", () => {
+    // Case: TC-121 (AC-09)
+    // Given: the list opened, closed and opened again from the same counter
+    const { table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const oldPopup = openCounter(table);
+    const oldClone = oldPopup.children[0];
+    click(counters(descriptionCell(table))[0]);
+    expect(popups()).toHaveLength(0);
+    const popup = openCounter(table);
+    expect(popup).not.toBe(oldPopup);
+
+    // When: the old list's clone is double-clicked, then the new list's clone
+    click(oldClone, "dblclick");
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+    click(popup.children[0], "dblclick");
+
+    // Then: only the new list forwards, and it is still the single list
+    expect(onRefDoubleClick).toHaveBeenCalledTimes(1);
+    expect(onRefDoubleClick.mock.calls[0][1]).toBe(popup.children[0]);
+    expect(popups()).toEqual([popup]);
+  });
+
+  it("forwards from the regenerated clone only after a search re-clone (TC-122)", () => {
+    // Case: TC-122 (AC-09)
+    // Given: an open list whose wt-3 clone is replaced by a search synchronisation
+    const { controller, table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    const popup = openCounter(table);
+    const oldClone = popup.querySelector<HTMLElement>('[data-name="wt-3"]')!;
+    markName(descriptionCell(table), "wt-3");
+    controller.syncSearchHighlights();
+    const newClone = popup.querySelector<HTMLElement>('[data-name="wt-3"]')!;
+    expect(newClone).not.toBe(oldClone);
+    expect(oldClone.isConnected).toBe(false);
+
+    // When: the old clone is double-clicked, then the new clone once
+    click(oldClone, "dblclick");
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+    click(newClone, "dblclick");
+
+    // Then: exactly one forward with the new clone on the same list element
+    expect(onRefDoubleClick).toHaveBeenCalledTimes(1);
+    expect(onRefDoubleClick.mock.calls[0][1]).toBe(newClone);
+    expect(popups()).toEqual([popup]);
+  });
+
+  it("forwards once after three counter open / close cycles (TC-123)", () => {
+    // Case: TC-123 (AC-09)
+    // Given: the list opened and closed by the counter three times, then opened again
+    const { table, onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+    for (let i = 0; i < 3; i++) {
+      openCounter(table);
+      click(counters(descriptionCell(table))[0]);
+    }
+    const popup = openCounter(table);
+
+    // When: a clone is double-clicked once
+    click(popup.children[0], "dblclick");
+
+    // Then: one forward
+    expect(onRefDoubleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards nothing from a measuring clone (TC-124)", () => {
+    // Case: TC-124 (AC-09)
+    // Given: measuring clones are double-clicked while they are attached
+    let measured = 0;
+    fixture.onMeasureRef = (clone) => {
+      measured++;
+      click(clone, "dblclick");
+    };
+
+    // When: the table is laid out (the measuring area is built and removed)
+    const { onRefDoubleClick } = setupTable([{ refs: ac01Refs(), head: true }]);
+
+    // Then: clones were measured but none forwarded
+    expect(measured).toBeGreaterThan(0);
+    expect(onRefDoubleClick).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { part: "icon", selector: '[data-name="main"] .codicon' },
     { part: "search mark", selector: '[data-name="main"] .findMatch' },
     { part: "combined remote", selector: '[data-name="main"] .gitRefHeadRemote' }

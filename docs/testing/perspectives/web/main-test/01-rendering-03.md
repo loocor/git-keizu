@@ -129,7 +129,7 @@ S56の描画接続・最小幅・保存値維持の契約を引き継ぎ、S56 T
 > Status: active
 > Supersedes: -
 > Signature: `private handleRefDoubleClick(event: MouseEvent, ref: HTMLElement): void` / `RefOverflowController` 生成時の `onRefDoubleClick: (event, ref) => this.handleRefDoubleClick(event, ref)` の配線 / 行内の `addListenerToClass("gitRef", "dblclick", ...)` から同メソッドへの委譲（MouseEventとHTMLElementの `currentTarget` を確認して渡す）
-> Target Path: `web/main.ts`（`handleRefDoubleClick`。実装後に行範囲へ更新）、`web/main.ts:522-530`（controller生成。`onRefDoubleClick` の追加先）、`web/main.ts:1332-1345`（行内 `gitRef` のdblclickリスナー。共通メソッドへの置き換え先）
+> Target Path: `web/main.ts:1400-1413`（`handleRefDoubleClick`）、`web/main.ts:522-531`（controller生成。526行の `onRefDoubleClick`）、`web/main.ts:1333-1336`（行内 `gitRef` のdblclickリスナーから同メソッドへの委譲）
 > Test File: `tests/web/main.refOverflow.test.ts`
 
 対応プラン §3.4〜§3.6 と確定仕様 §4・§8（AC-01〜AC-10）の観点。行内の `gitRef` dblclickリスナーの処理を `handleRefDoubleClick` へ抽出し、controller生成時の `onRefDoubleClick` からも同じメソッドを呼ぶ。処理順は、伝播停止 → active dialogの閉鎖 → active context menuの閉鎖 → `.detachedWorktree` の除外 → 対象解決（`event.target.closest(COMBINED_REMOTE_SELECTOR)` がバッジ内なら `remoteElem.dataset.name` とリモート指定 `true`、それ以外は `ref.dataset.name`）→ 既存 `checkoutBranchAction` の呼出し（第5引数なし、既定の `recordAction = false`）。対象がElementでない場合はUI閉鎖後に終了し、参照名の `undefined` は送信しない。S60（描画接続・最小幅。TC-476の計測複製、TC-477の行内 `main`）は期待結果が変わらないためactiveのままで、本節はadditive。
@@ -186,3 +186,35 @@ fixtureは既存の `resetView` / `menuCommits` / `loadMenuCommits` / `openList`
 - Type: excluded(非Element対象の判定はcontroller側 S8 TC-119。DOM型はTypeScriptで保証される)
 
 **失敗系/正常系比（煙感知器）**: 正常系10件、失敗系6件。
+
+### Feature 061-06 テスト対応と実行証跡（S85）
+
+- テストファイル: `tests/web/main.refOverflow.test.ts`、describe `ref double-click checkout parity (S85)`。専用describeの `beforeEach` で `vi.importActual` の `checkoutBranchAction` を spy へcall-throughし、`afterEach` で `mockReset` する（他のdescribeは従来のstubのまま）。dialog・contextMenuは既存のcall-through。fixtureは `menuCommits` に `upstream/feature/x` を加えた `parityCommits` と `MENU_WORKTREES`。「一覧」は `main: 900` / `@{0}: 900` で折り畳み、「行内」は幅指定なしで全件表示（counter 0個を前提assert）。
+- Case → `it` 対応:
+  - TC-768: `checks out a listed local branch once (TC-768)`（一覧→行内を同一test内で比較。counterと複製の存在は前提assert）
+  - TC-769: `checks out the origin part of a combined badge under a typed name from the $placement ($part) (TC-769)`（row / list × origin part / origin search mark の4件）
+  - TC-770: `checks out the upstream part of a combined badge from the $placement ($part) (TC-770)`（4件）
+  - TC-771: `checks out a standalone remote under a typed name from the %s (TC-771)`（2件）
+  - TC-772: `checks out feat&x by its raw name from the $placement ($part) (TC-772)`（row / list × name / icon / search mark の6件）
+  - TC-773: `checks out $label without a UI-side exclusion (TC-773)`（`main` 行内、`feature/x` 行内・一覧の3件）
+  - TC-774: `runs the action for a tag without a checkout from the %s (TC-774)`（2件）
+  - TC-775: `runs the action for a stash without a checkout from the %s (TC-775)`（2件。一覧では `popups()` が同じ要素のまま）
+  - TC-776: `ignores a detached worktree from the %s (TC-776)`（2件）
+  - TC-777: `sends nothing when the remote name dialog is cancelled from the %s (TC-777)`（2件。Cancelボタンclick）
+  - TC-778: `cannot confirm an empty remote name from the %s (TC-778)`（2件）
+  - TC-779: `cannot confirm an invalid remote name from the %s (TC-779)`（2件）
+  - TC-780: `closes the dialog, then the menu, before resolving a $kind target from the $placement (TC-780)`（local / remote / tag / stash / detached × row / list の10件。順序は `hideDialog` と `hideContextMenu` の `invocationCallOrder`）
+  - TC-781: `keeps the same list right after a listed local checkout request (TC-781)`
+  - TC-782: `keeps the same list while the remote name dialog is open and after its cancel (TC-782)`
+  - TC-783: `closes the list through the forceRender table replacement after a completed checkout (TC-783)`
+- 観測上の補足:
+  - 新規checkoutダイアログの有無は `isDialogActive()` と `#dialogInput0` の有無・`value` で観測する。実 `checkoutBranchAction` はdialogsモジュール内部の `showFormDialog` を直接呼ぶため、module exportのspy（`dialogs.showFormDialog`）には記録されない。
+  - TC-782のキャンセルはEscape（`handleDialogKeydown`）で行う。Cancelボタンのclickはdocumentへbubbleし、既存の外側click閉鎖（`web/refOverflow-test.md` S4 TC-073。`POPUP_INSIDE_SELECTOR` にdialogは含まれない）で一覧が閉じるため、本caseが観測する「キャンセルによる新しい閉鎖なし」とは別の既存要因。
+  - 検索markは実FindWidget（`Ctrl+F` → 語を入力 → `SEARCH_DEBOUNCE_MS + 50` 待機）で生成し、`span.findMatch` を対象にする。
+  - 最近の操作の追加なしは `viewState.repos[TEST_REPO].recentActions` が `RECENT_ACTIONS` のままであることで観測する。
+- RED / GREEN（2026-10-17、主回帰 `checks out a listed local branch once (TC-768)`）:
+  - RED: `git worktree add <scratchpad>/red-061-06 4294532` → `node_modules` をsymlink → 更新後の `tests/web/main.refOverflow.test.ts` のみコピー → `pnpm exec vitest run tests/web/main.refOverflow.test.ts -t 'checks out a listed local branch once' --maxWorkers=1` → 1 failed。失敗箇所は `expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)])` で `AssertionError: expected [] to deeply equal [ { command: 'checkoutBranch', …(3) } ]`（要求1回期待に対し0回。counterと複製の前提assertは通過）。worktreeは `git worktree remove --force` と `git worktree prune` で削除済み。
+  - GREEN: 作業ツリーで同コマンド → 1 passed。
+- 実行結果（2026-10-17）: `pnpm exec vitest run tests/web/main.refOverflow.test.ts tests/web/refOverflow.test.ts tests/web/refMenu.test.ts tests/web/messageHandler.test.ts --maxWorkers=1` 4 files / 561 passed（S85 45件を含む）。`pnpm exec vitest run tests/web/main.test.ts tests/web/main.keyboard.test.ts --maxWorkers=1` 2 files / 621 passed。`pnpm run typecheck` / `pnpm run lint` exit 0。
+- 既存ownerの再実行（複製せず同コマンドで成功）: S78 TC-539 / TC-540、S59 TC-464〜TC-474、S67 TC-624（`completed`）、S21 TC-089（`pullFailed`）、`tests/web/messageHandler.test.ts` describe `handleMessage checkoutBranch response`。
+- 手動確認: 未実施。対応プラン §6 の手動確認（VS Code拡張で同一commitの同じlocal branchを幅を変えた行内と一覧から実マウスでダブルクリック、local切替、結合 / 独立remoteの入力・キャンセル、一覧が開始時に消えず成功更新後に閉じること、右クリック、Enter / Space、ContextMenu / Shift+F10、Escape / Tab）は、VS Code実画面が本セッションで未実施のため受け入れ上の残件。

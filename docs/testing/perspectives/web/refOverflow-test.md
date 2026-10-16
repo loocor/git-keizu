@@ -427,7 +427,7 @@ S4 TC-064 は「一覧内に `id` 属性を持つ要素が 0 個」としてい�
 > Status: active
 > Supersedes: S7
 > Signature: `RefOverflowOptions.onRefDoubleClick: (event: MouseEvent, ref: HTMLElement) => void`（必須readonly callback）/ `private handlePopupDoubleClick(event: MouseEvent, popup: HTMLElement): void`
-> Target Path: `web/refOverflow.ts:153-163`（`RefOverflowOptions`。callbackの追加先）、`web/refOverflow.ts:694-724`（`openPopup`。705-706行のclick / dblclickの `stopPropagation` 登録のうち、dblclickを `handlePopupDoubleClick` へ置き換える箇所）、`web/refOverflow.ts`（`handlePopupDoubleClick`。実装後に行範囲へ更新）
+> Target Path: `web/refOverflow.ts:153-164`（`RefOverflowOptions`。161行の `onRefDoubleClick`）、`web/refOverflow.ts:696-726`（`openPopup`。708行で `handlePopupDoubleClick` を登録）、`web/refOverflow.ts:762-770`（`handlePopupDoubleClick`）
 > Test File: `tests/web/refOverflow.test.ts`
 
 対応プラン §3.4・§3.6 と確定仕様 §4.2・AC-07・AC-09・AC-10 の観点。S7（S4から継承）のTC-070は「一覧内のclick / dblclickはいずれも無操作」としていたが、一覧のdblclickを所有者（`web/main.ts` の共通checkout処理）へ転送する契約へ変わるため、S7を置き換える。**S7のTC-115と、S7がS4から継承したTC-061〜TC-063、TC-065〜TC-069、TC-071〜TC-086、TC-098は期待結果を変えずに本節へ明示的に引き継ぎ**、テストは同じCase IDのままdescribe `RefOverflowController hidden-badge list` に残る。**置き換えるのは旧TC-070だけで、新TC-116が担う**（clickは転送0回、dblclickは元イベントと複製バッジをそのまま渡して1回転送、row・documentのbubble 0回、一覧は開いたまま）。S6のキーボード契約はactiveのまま。
@@ -469,3 +469,19 @@ fixtureはS4 / S7と同じ `createController` で、`onRefDoubleClick` は `vi.f
 - Type: TC-119
 
 **失敗系/正常系比（煙感知器）**: 正常系2件、失敗系7件。
+
+### Task 3 テスト対応（Feature 061-06）— S8
+
+- テストファイル: `tests/web/refOverflow.test.ts`、describe `RefOverflowController hidden-badge list`（TC-116 の直後に追加。fixtureは `createController` の `onRefDoubleClick` spy）
+- Case → `it` 対応:
+  - TC-116: `forwards only a dblclick on a listed clone to the owner (TC-116)`（Task 2 で実装。再利用）
+  - TC-117: `forwards a dblclick on the $part to the nearest clone badge (TC-117)`（button body / name / icon / search mark / combined remote child の 5 件。第 2 引数が最寄りの複製 `.gitRef` で target 自身ではないことを `toBe` / `not.toBe` で確認）
+  - TC-118: `forwards nothing for a dblclick on the list padding (TC-118)`（document の bubble 0 回）
+  - TC-119: `forwards nothing for a dblclick dispatched on a text node (TC-119)`（window の `error` 0 回）
+  - TC-120: `forwards nothing from a kept clone after closePopup (TC-120)`
+  - TC-121: `forwards nothing from the clone of a previous list after reopening (TC-121)`
+  - TC-122: `forwards from the regenerated clone only after a search re-clone (TC-122)`
+  - TC-123: `forwards once after three counter open / close cycles (TC-123)`
+  - TC-124: `forwards nothing from a measuring clone (TC-124)`（`fixture.onMeasureRef` で計測中の複製へ dblclick を送る）
+- 引き継ぎ: describe `RefOverflowController hidden-badge list` の TC-061〜TC-063、TC-065〜TC-069、TC-071〜TC-086、TC-098 の各 `it` と、TC-115（`drops menu state and ids from clones (TC-064)`）
+- 実行結果（2026-10-17）: `pnpm exec vitest run tests/web/main.refOverflow.test.ts tests/web/refOverflow.test.ts tests/web/refMenu.test.ts tests/web/messageHandler.test.ts --maxWorkers=1` 4 files / 561 passed（`tests/web/refOverflow.test.ts` 全件 pass、TC-116〜TC-124 の 13 件を含む）
