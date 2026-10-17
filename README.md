@@ -212,11 +212,11 @@ These shortcuts run while focus is on a commit row, a label, or the graph backgr
 
 | Placeholder   | Expands to                                                                   |
 | ------------- | ---------------------------------------------------------------------------- |
-| `${repoPath}` | Absolute path of the repository                                              |
-| `${repoName}` | The repository's directory name                                              |
+| `${repoPath}` | Absolute path of the main worktree                                           |
+| `${repoName}` | The main worktree's directory name                                           |
 | `${branch}`   | The branch, with slashes flattened to hyphens so it stays a single directory |
 
-A leading `~` expands to the home directory, and a relative template resolves against the repository. On Windows, a path that names a drive without a root, such as `D:worktrees`, becomes an absolute path using that drive's working directory, or the drive root when the drive has none. The default places each worktree beside its repo. To collect them under one directory instead:
+`${repoPath}` is the main checkout, including when the graph is open on a linked worktree. A template such as `${repoPath}/.worktrees/${branch}` therefore stays beside the main repository instead of nesting another `.worktrees` directory inside the worktree you have open. A leading `~` expands to the home directory, and a relative template resolves against the main worktree. On Windows, a path that names a drive without a root, such as `D:worktrees`, becomes an absolute path using that drive's working directory, or the drive root when the drive has none. The default places each worktree beside the main checkout. To collect them under one directory instead:
 
 ```json
 "git-keizu.worktreePathTemplate": "~/.worktrees/${repoName}/${branch}"

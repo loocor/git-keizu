@@ -917,6 +917,44 @@ describe("buildRefContextMenuItems worktree menu items (S23)", () => {
     expect(pathInput.default).toBe("/home/dev/.worktrees/repo/feature-x");
   });
 
+  it("uses the main worktree as repoPath when the graph is a linked worktree", () => {
+    const linked = "/test/repo/.worktrees/feat-slot-candidate-band";
+    (globalThis as Record<string, unknown>).viewState = {
+      dialogDefaults: {
+        merge: { noFastForward: true, squashCommits: false, noCommit: false },
+        cherryPick: { recordOrigin: false, noCommit: false },
+        stashUncommittedChanges: { includeUntracked: false },
+        createWorktree: { openTerminal: true },
+        removeWorktree: { deleteBranch: true }
+      },
+      worktreePath: {
+        template: `${"$"}{repoPath}/.worktrees/${"$"}{branch}`,
+        homeDir: "/home/dev",
+        platform: "posix"
+      },
+      mainWorktreePaths: {
+        [linked]: "/test/repo"
+      }
+    };
+    const sourceElem = createMockElement(["head"]);
+    const menu = buildRefContextMenuItems(
+      linked,
+      "main",
+      sourceElem,
+      false,
+      "feat/slot-candidate-band",
+      undefined,
+      null
+    );
+
+    const createItem = findMenuItem(menu, "Create Worktree&#8230;");
+    createItem!.onClick();
+
+    const inputs = vi.mocked(showFormDialog).mock.calls[0][1];
+    const pathInput = inputs[0] as DialogTextInput;
+    expect(pathInput.default).toBe("/test/repo/.worktrees/main");
+  });
+
   it("Open Terminal Here sends openTerminal message (TC-114)", () => {
     // Case: TC-114
     // Given: A local branch with worktree info

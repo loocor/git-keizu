@@ -151,6 +151,8 @@ export interface GitKeizuViewState {
   showCurrentBranchByDefault: boolean;
   showRecentActions: boolean;
   worktreePath: WorktreePathViewState;
+  /** Checkout path to the main worktree path, filled once `git worktree list` is known. */
+  mainWorktreePaths?: Readonly<Record<string, string>>;
 }
 
 export interface GitFileChange {

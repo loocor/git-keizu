@@ -71,6 +71,7 @@ import {
   worktreeCollectionsEqual
 } from "./utils";
 import { buildDetachedWorktreeContextMenuItems, getWorktreeLabelName } from "./worktreeMenu";
+import { mainWorktreePath } from "./worktreeSuggestion";
 
 const FLASH_ANIMATION_DURATION_MS = 850;
 export const MIN_COMMIT_LOAD_COUNT = 1;
@@ -799,6 +800,7 @@ class GitKeizuView {
         this.saveState();
         this.renderUncommitedChanges();
       }
+      this.rememberMainWorktree();
       this.triggerLoadCommitsCallback(false);
       this.updateCurrentBtnState();
       return;
@@ -808,6 +810,7 @@ class GitKeizuView {
     this.commits = commits;
     this.commitHead = commitHead;
     this.worktrees = worktrees ?? EMPTY_WORKTREE_COLLECTION;
+    this.rememberMainWorktree();
     this.commitLookup = {};
     this.saveState();
 
@@ -1045,6 +1048,19 @@ class GitKeizuView {
         commits: avatars[emails[i]]
       });
     }
+  }
+
+  /** `${repoPath}` is the main worktree, so a linked checkout does not nest another worktree inside itself. */
+  private rememberMainWorktree() {
+    const repo = this.currentRepo;
+    if (repo === undefined || repo === "") {
+      return;
+    }
+    const main = mainWorktreePath(this.worktrees) ?? repo;
+    if (viewState.mainWorktreePaths?.[repo] === main) {
+      return;
+    }
+    viewState.mainWorktreePaths = { ...viewState.mainWorktreePaths, [repo]: main };
   }
 
   /* State */

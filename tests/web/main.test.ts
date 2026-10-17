@@ -2371,6 +2371,65 @@ describe("GitKeizuView frontend integration", () => {
     });
   });
 
+  describe("main worktree path", () => {
+    function getViewState(): { mainWorktreePaths?: Record<string, string> } {
+      return (globalThis as Record<string, unknown>).viewState as {
+        mainWorktreePaths?: Record<string, string>;
+      };
+    }
+
+    it("records the main worktree for the open checkout", () => {
+      dispatchMessage({
+        command: "loadCommits",
+        commits: MOCK_COMMITS,
+        head: COMMIT_HASH_1,
+        moreCommitsAvailable: false,
+        hard: true,
+        worktrees: {
+          branches: {
+            main: { path: "/test/main-checkout", isMain: true },
+            "feat/slot": { path: "/test/repo", isMain: false }
+          },
+          detached: []
+        }
+      });
+
+      expect(getViewState().mainWorktreePaths?.[TEST_REPO]).toBe("/test/main-checkout");
+    });
+
+    it("records a detached main worktree", () => {
+      dispatchMessage({
+        command: "loadCommits",
+        commits: MOCK_COMMITS,
+        head: COMMIT_HASH_1,
+        moreCommitsAvailable: false,
+        hard: true,
+        worktrees: {
+          branches: {},
+          detached: [{ path: "/test/main-checkout", isMain: true, head: COMMIT_HASH_1 }]
+        }
+      });
+
+      expect(getViewState().mainWorktreePaths?.[TEST_REPO]).toBe("/test/main-checkout");
+    });
+
+    it("keeps the open checkout when the list has no main worktree", () => {
+      dispatchMessage({
+        command: "loadCommits",
+        commits: MOCK_COMMITS,
+        head: COMMIT_HASH_1,
+        moreCommitsAvailable: false,
+        hard: true,
+        worktrees: {
+          branches: { feature: { path: "/elsewhere", isMain: false } },
+          detached: []
+        }
+      });
+
+      expect(getViewState().mainWorktreePaths?.[TEST_REPO]).toBe(TEST_REPO);
+    });
+  });
+
   /* ---------------------------------------------------------------- */
   /* normalizeCommitLoadCount() helper (web/main-test 07-load-count)  */
   /* ---------------------------------------------------------------- */
