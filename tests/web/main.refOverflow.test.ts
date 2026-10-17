@@ -2912,32 +2912,59 @@ describe("stash label lifecycle and clicks (S61)", () => {
     expect(document.getElementById("commitDetails")).toBeNull();
   });
 
-  it.each([{ type: "click" }, { type: "dblclick" }])(
-    "stops a $type on the listed stash clone inside the list (TC-539, TC-540)",
-    ({ type }) => {
-      // Case: TC-539 (click) / TC-540 (dblclick)
-      // Given: stash A's clone in the list and a bubbling listener on the document
-      loadStashCommits(true);
-      const clone = listedStashClone(STASH_A);
-      const list = popups()[0];
-      const reachedDocument = vi.fn();
-      document.addEventListener(type, reachedDocument);
+  it("stops a click on the listed stash clone inside the list (TC-539)", () => {
+    // Case: TC-539
+    // Given: stash A's clone in the list and a bubbling listener on the document
+    loadStashCommits(true);
+    const clone = listedStashClone(STASH_A);
+    const list = popups()[0];
+    const reachedDocument = vi.fn();
+    document.addEventListener("click", reachedDocument);
 
-      // When: the clone receives the event
-      try {
-        fire(clone, type);
-      } finally {
-        document.removeEventListener(type, reachedDocument);
-      }
-
-      // Then: the event stopped in the list; no checkout, no details, no request
-      expect(reachedDocument).not.toHaveBeenCalled();
-      expect(popups()).toEqual([list]);
-      expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
-      expect(vscode.postMessage).not.toHaveBeenCalled();
-      expect(document.getElementById("commitDetails")).toBeNull();
+    // When: the clone is clicked
+    try {
+      fire(clone, "click");
+    } finally {
+      document.removeEventListener("click", reachedDocument);
     }
-  );
+
+    // Then: the event stopped in the list; no checkout, no details, no request
+    expect(reachedDocument).not.toHaveBeenCalled();
+    expect(popups()).toEqual([list]);
+    expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+    expect(document.getElementById("commitDetails")).toBeNull();
+  });
+
+  it("hands a dblclick on the listed stash clone to the checkout action (TC-540)", () => {
+    // Case: TC-540
+    // Given: stash A's clone in the list and a bubbling listener on the document
+    loadStashCommits(true);
+    const clone = listedStashClone(STASH_A);
+    const list = popups()[0];
+    const reachedDocument = vi.fn();
+    document.addEventListener("dblclick", reachedDocument);
+
+    // When: the clone is double-clicked
+    try {
+      fire(clone, "dblclick");
+    } finally {
+      document.removeEventListener("dblclick", reachedDocument);
+    }
+
+    // Then: the event stopped in the list and the shared action got the clone with its raw
+    // (absent) name and no further arguments; the list stays open, no details. The stub sends
+    // nothing, so the request count is not evidence that a stash cannot be checked out (TC-775).
+    expect(reachedDocument).not.toHaveBeenCalled();
+    expect(refMenu.checkoutBranchAction).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(refMenu.checkoutBranchAction).mock.calls[0];
+    expect(call).toHaveLength(3);
+    expect(call[1]).toBe(clone);
+    expect(call[2]).toBe(clone.dataset.name);
+    expect(popups()).toEqual([list]);
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+    expect(document.getElementById("commitDetails")).toBeNull();
+  });
 
   it("requests the stash details from a left click on the row body (TC-541)", () => {
     // Case: TC-541
@@ -3449,5 +3476,692 @@ describe("branch path targets from the row and the ref list (S68)", () => {
       hashTitle: hashOf(PATH_M)
     });
     expect(lastPathHighlightHashes()).toEqual(M_ALL_ANCESTORS);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* S85: double-click checkout parity between the row and the list     */
+/* ------------------------------------------------------------------ */
+
+const PARITY_ROW = 0;
+const PARITY_STASH_ROW = 1;
+const LOCAL_FEATURE = "feature/x";
+const COMBINED_ORIGIN_NAME = "origin/feature/x";
+const COMBINED_UPSTREAM_NAME = "upstream/feature/x";
+const STANDALONE_REMOTE_NAME = "origin/dev";
+const STANDALONE_REMOTE_BRANCH = "dev";
+const SPECIAL_NAME = "feat&x";
+const CURRENT_BRANCH = "main";
+const TAG_NAME = "v1.0";
+const RENAMED_FEATURE = "local/x";
+const RENAMED_DEV = "local-dev";
+const INVALID_REF_NAME = "bad..name";
+const ORIGIN_REMOTE = "origin";
+const UPSTREAM_REMOTE = "upstream";
+const LOCAL_FEATURE_SELECTOR = `.gitRef[data-name="${LOCAL_FEATURE}"]`;
+const STANDALONE_REMOTE_SELECTOR = `.gitRef.remote[data-name="${STANDALONE_REMOTE_NAME}"]`;
+const SPECIAL_NAME_SELECTOR = `.gitRef[data-name="${SPECIAL_NAME}"]`;
+const CURRENT_BRANCH_SELECTOR = `.gitRef[data-name="${CURRENT_BRANCH}"]`;
+const TAG_SELECTOR = `.gitRef.tag[data-name="${TAG_NAME}"]`;
+const DETACHED_SELECTOR = ".gitRef.detachedWorktree";
+const COUNTER_SELECTOR = ":scope > button.refOverflowCounter";
+const DIALOG_ACTION_ID = "dialogAction";
+const DIALOG_INPUT_ID = "dialogInput0";
+const NO_INPUT_CLASS = "noInput";
+const INPUT_INVALID_CLASS = "inputInvalid";
+// Rounds that drain a load chain left by an earlier test before a refresh is observed (S67).
+const PARITY_SETTLE_ROUNDS = 3;
+
+type CheckoutKind = "local" | "remote" | "tag" | "stash" | "detached";
+
+interface ParityBadge {
+  readonly badge: HTMLElement;
+  readonly list: HTMLElement | null;
+}
+
+interface Bubbles {
+  readonly row: number;
+  readonly document: number;
+}
+
+// The menu fixture plus an upstream remote of feature/x, so its combined badge has two parts.
+function parityCommits(): GitCommitNode[] {
+  const [first, ...rest] = menuCommits();
+  return [
+    {
+      ...first,
+      refs: [...first.refs, { hash: first.hash, name: COMBINED_UPSTREAM_NAME, type: "remote" }]
+    },
+    ...rest
+  ];
+}
+
+// list: the oversized main and stash fold everything behind them; row: every badge fits.
+function loadParityCommits(placement: Placement): void {
+  layout.badgeOuter =
+    placement === "list" ? { main: OVERSIZED_BADGE_OUTER, "@{0}": OVERSIZED_BADGE_OUTER } : {};
+  loadCommits({ commits: parityCommits(), worktrees: MENU_WORKTREES });
+  vi.clearAllMocks();
+  if (placement === "row") expect(counters()).toHaveLength(0);
+}
+
+function settleParityLoads(): void {
+  for (let round = 0; round < PARITY_SETTLE_ROUNDS; round++) {
+    loadBranchesResponse(false);
+    loadCommits({ commits: parityCommits(), worktrees: MENU_WORKTREES, hard: false });
+  }
+  vi.clearAllMocks();
+}
+
+// The in-row badge, or its clone from the opened list; the counter and the clone are
+// preconditions of the fixture, so their absence is an infrastructure failure.
+function parityBadge(placement: Placement, selector: string, rowIndex = PARITY_ROW): ParityBadge {
+  const original = requireElement(
+    descriptionCell(rowIndex).querySelector<HTMLElement>(`:scope > ${selector}`),
+    `badge ${selector}`
+  );
+  if (placement === "row") {
+    expect(original.classList.contains(HIDDEN_CLASS)).toBe(false);
+    return { badge: original, list: null };
+  }
+  expect(original.classList.contains(HIDDEN_CLASS)).toBe(true);
+  requireElement(descriptionCell(rowIndex).querySelector(COUNTER_SELECTOR), "counter");
+  const list = openList(rowIndex);
+  const clone = requireElement(
+    list.querySelector<HTMLElement>(selector),
+    `listed clone ${selector}`
+  );
+  expect(clone).not.toBe(original);
+  return { badge: clone, list };
+}
+
+function remotePart(badge: HTMLElement, remote: string): HTMLElement {
+  return requireElement(
+    badge.querySelector<HTMLElement>(`.gitRefHeadRemote[data-remote="${remote}"]`),
+    `${remote} part`
+  );
+}
+
+function searchMarkIn(elem: Element): Element {
+  return requireElement(elem.querySelector(`.${FIND_MATCH_CLASS}`), "search mark");
+}
+
+async function searchFor(term: string): Promise<void> {
+  pressShortcut("f");
+  const input = document.getElementById("findInput") as HTMLInputElement;
+  input.value = term;
+  input.dispatchEvent(new KeyboardEvent("keyup", { key: term.slice(-1), bubbles: true }));
+  await new Promise((resolveSearch) =>
+    setTimeout(resolveSearch, findWidgetModule.SEARCH_DEBOUNCE_MS + 50)
+  );
+  vi.clearAllMocks();
+}
+
+// click(1) → click(2) → dblclick(2) as a real mouse sends them; bubbling listeners on the row
+// and the document count what escaped the badge / the list.
+function doubleClick(target: Element, rowIndex = PARITY_ROW): Bubbles {
+  const row = commitRow(rowIndex);
+  const rowListener = vi.fn();
+  const documentListener = vi.fn();
+  for (const type of ["click", "dblclick"]) {
+    row.addEventListener(type, rowListener);
+    document.addEventListener(type, documentListener);
+  }
+  try {
+    fire(target, "click", { detail: 1 });
+    fire(target, "click", { detail: 2 });
+    fire(target, "dblclick", { detail: 2 });
+  } finally {
+    for (const type of ["click", "dblclick"]) {
+      row.removeEventListener(type, rowListener);
+      document.removeEventListener(type, documentListener);
+    }
+  }
+  return { row: rowListener.mock.calls.length, document: documentListener.mock.calls.length };
+}
+
+function localCheckout(branchName: string): Record<string, unknown> {
+  return { command: "checkoutBranch", repo: TEST_REPO, branchName, remoteBranch: null };
+}
+
+function remoteCheckout(
+  branchName: string,
+  remoteName: string,
+  remoteBranchName: string
+): Record<string, unknown> {
+  return {
+    command: "checkoutBranch",
+    repo: TEST_REPO,
+    branchName,
+    remoteBranch: { remoteName, branchName: remoteBranchName }
+  };
+}
+
+function checkoutCalls(): unknown[][] {
+  return vi.mocked(refMenu.checkoutBranchAction).mock.calls;
+}
+
+function recentActions(): string[] {
+  return (
+    globalThis as unknown as { viewState: { repos: Record<string, { recentActions: string[] }> } }
+  ).viewState.repos[TEST_REPO].recentActions;
+}
+
+// Common invariants of the resolved cases: no row selection, details, comparison or recent action.
+function expectIsolated(bubbles: Bubbles): void {
+  expect(bubbles).toEqual({ row: 0, document: 0 });
+  expect(postedMessages("commitDetails")).toHaveLength(0);
+  expect(postedMessages("compareCommits")).toHaveLength(0);
+  expect(document.getElementById("commitDetails")).toBeNull();
+  expect(recentActions()).toEqual(RECENT_ACTIONS);
+}
+
+// The real action reaches showFormDialog inside the dialogs module, so the spy on the module
+// export never sees it; the dialog's DOM state is the observation instead.
+function expectNoCheckoutDialog(): void {
+  expect(dialogs.isDialogActive()).toBe(false);
+  expect(document.getElementById(DIALOG_INPUT_ID)).toBeNull();
+}
+
+function expectCheckoutInputDialog(initialValue: string): void {
+  expect(dialogs.isDialogActive()).toBe(true);
+  const input = dialogInput();
+  expect(input.type).toBe("text");
+  expect(input.value).toBe(initialValue);
+  expect(vscode.postMessage).not.toHaveBeenCalled();
+}
+
+function typeDialogInput(value: string): void {
+  const input = dialogInput();
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+}
+
+function dialogActionButton(): HTMLButtonElement {
+  return requireElement(
+    document.getElementById(DIALOG_ACTION_ID) as HTMLButtonElement | null,
+    DIALOG_ACTION_ID
+  );
+}
+
+function withPlacements<T extends object>(entries: readonly T[]): (T & { placement: Placement })[] {
+  return entries.flatMap((entry) => PLACEMENTS.map((placement) => ({ ...entry, placement })));
+}
+
+// @see docs/testing/perspectives/web/main-test/01-rendering-03.md
+describe("ref double-click checkout parity (S85)", () => {
+  beforeEach(async () => {
+    await resetView(null);
+    // The real action decides local / remote / none; the spy only records the calls.
+    const actual = await vi.importActual<RefMenuModule>("../../web/refMenu");
+    vi.mocked(refMenu.checkoutBranchAction).mockImplementation(actual.checkoutBranchAction);
+  });
+
+  afterEach(() => {
+    if (dialogs.isDialogActive()) dialogs.hideDialog();
+    vi.mocked(refMenu.checkoutBranchAction).mockReset();
+  });
+
+  it("checks out a listed local branch once (TC-768)", () => {
+    // Case: TC-768 (AC-01, AC-04, AC-10)
+    // Given: feature/x folded into the list behind the oversized main
+    loadParityCommits("list");
+    const { badge: clone } = parityBadge("list", LOCAL_FEATURE_SELECTOR);
+
+    // When: the clone receives click(1), click(2) and dblclick(2)
+    const listBubbles = doubleClick(clone);
+
+    // Then: exactly one local checkout request with the full payload, through the real action
+    expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)]);
+    expect(checkoutCalls()).toHaveLength(1);
+    expect(checkoutCalls()[0]).toHaveLength(3);
+    expect(checkoutCalls()[0][1]).toBe(clone);
+    expect(checkoutCalls()[0][2]).toBe(LOCAL_FEATURE);
+    expectNoCheckoutDialog();
+    expectIsolated(listBubbles);
+
+    // And: the same badge in a row wide enough to show it sends the identical payload
+    loadParityCommits("row");
+    const { badge } = parityBadge("row", LOCAL_FEATURE_SELECTOR);
+    const rowBubbles = doubleClick(badge);
+    expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)]);
+    expect(checkoutCalls()).toHaveLength(1);
+    expect(checkoutCalls()[0][1]).toBe(badge);
+    expectIsolated(rowBubbles);
+  });
+
+  it.each(
+    withPlacements([
+      { part: "origin part", pick: (badge: HTMLElement) => remotePart(badge, ORIGIN_REMOTE) },
+      {
+        part: "origin search mark",
+        pick: (badge: HTMLElement) => searchMarkIn(remotePart(badge, ORIGIN_REMOTE))
+      }
+    ])
+  )(
+    "checks out the origin part of a combined badge under a typed name from the $placement ($part) (TC-769)",
+    async (entry) => {
+      // Case: TC-769 (AC-02, AC-04, AC-06)
+      // Given: feature/x | origin | upstream with "origin" marked by the real find widget
+      loadParityCommits(entry.placement);
+      await searchFor(ORIGIN_REMOTE);
+      const { badge } = parityBadge(entry.placement, LOCAL_FEATURE_SELECTOR);
+      const target = entry.pick(badge);
+
+      // When: the origin part (or its mark) is double-clicked
+      const bubbles = doubleClick(target);
+
+      // Then: one name dialog starts from feature/x and nothing was requested yet
+      expectCheckoutInputDialog(LOCAL_FEATURE);
+      expect(checkoutCalls()).toHaveLength(1);
+      expect(checkoutCalls()[0]).toHaveLength(4);
+      expect(checkoutCalls()[0][1]).toBe(badge);
+      expect(checkoutCalls()[0][2]).toBe(COMBINED_ORIGIN_NAME);
+      expect(checkoutCalls()[0][3]).toBe(true);
+
+      // When: the name is changed to local/x and confirmed
+      typeDialogInput(RENAMED_FEATURE);
+      clickDialogButton(DIALOG_ACTION_ID);
+
+      // Then: one remote checkout for origin/feature/x under the typed name, no direct local one
+      expect(postedPayloads()).toEqual([
+        remoteCheckout(RENAMED_FEATURE, ORIGIN_REMOTE, LOCAL_FEATURE)
+      ]);
+      expect(dialogs.isDialogActive()).toBe(false);
+      expectIsolated(bubbles);
+    }
+  );
+
+  it.each(
+    withPlacements([
+      { part: "upstream part", pick: (badge: HTMLElement) => remotePart(badge, UPSTREAM_REMOTE) },
+      {
+        part: "upstream search mark",
+        pick: (badge: HTMLElement) => searchMarkIn(remotePart(badge, UPSTREAM_REMOTE))
+      }
+    ])
+  )(
+    "checks out the upstream part of a combined badge from the $placement ($part) (TC-770)",
+    async (entry) => {
+      // Case: TC-770 (AC-02, AC-04)
+      // Given: feature/x | origin | upstream with "upstream" marked by the real find widget
+      loadParityCommits(entry.placement);
+      await searchFor(UPSTREAM_REMOTE);
+      const { badge } = parityBadge(entry.placement, LOCAL_FEATURE_SELECTOR);
+      const target = entry.pick(badge);
+
+      // When: the upstream part (or its mark) is double-clicked and the initial name is confirmed
+      const bubbles = doubleClick(target);
+      expectCheckoutInputDialog(LOCAL_FEATURE);
+      expect(checkoutCalls()[0][2]).toBe(COMBINED_UPSTREAM_NAME);
+      clickDialogButton(DIALOG_ACTION_ID);
+
+      // Then: the request names the clicked remote, not origin
+      expect(postedPayloads()).toEqual([
+        remoteCheckout(LOCAL_FEATURE, UPSTREAM_REMOTE, LOCAL_FEATURE)
+      ]);
+      expectIsolated(bubbles);
+    }
+  );
+
+  it.each(PLACEMENTS)(
+    "checks out a standalone remote under a typed name from the %s (TC-771)",
+    (placement) => {
+      // Case: TC-771 (AC-02, AC-04)
+      // Given: the standalone origin/dev badge
+      loadParityCommits(placement);
+      const { badge } = parityBadge(placement, STANDALONE_REMOTE_SELECTOR);
+
+      // When: it is double-clicked and dev is renamed to local-dev
+      const bubbles = doubleClick(badge);
+      expectCheckoutInputDialog(STANDALONE_REMOTE_BRANCH);
+      expect(checkoutCalls()).toHaveLength(1);
+      expect(checkoutCalls()[0]).toHaveLength(3);
+      expect(checkoutCalls()[0][1]).toBe(badge);
+      expect(checkoutCalls()[0][2]).toBe(STANDALONE_REMOTE_NAME);
+      typeDialogInput(RENAMED_DEV);
+      clickDialogButton(DIALOG_ACTION_ID);
+
+      // Then: one remote checkout split at the first slash
+      expect(postedPayloads()).toEqual([
+        remoteCheckout(RENAMED_DEV, ORIGIN_REMOTE, STANDALONE_REMOTE_BRANCH)
+      ]);
+      expectIsolated(bubbles);
+    }
+  );
+
+  it.each(
+    withPlacements([
+      {
+        part: "name",
+        marked: false,
+        pick: (badge: HTMLElement) => requireElement(badge.querySelector(".gitRefName"), "name")
+      },
+      {
+        part: "icon",
+        marked: false,
+        pick: (badge: HTMLElement) => requireElement(badge.querySelector(".codicon"), "icon")
+      },
+      {
+        part: "search mark",
+        marked: true,
+        pick: (badge: HTMLElement) =>
+          searchMarkIn(requireElement(badge.querySelector(".gitRefName"), "name"))
+      }
+    ])
+  )("checks out feat&x by its raw name from the $placement ($part) (TC-772)", async (entry) => {
+    // Case: TC-772 (AC-03, AC-04)
+    // Given: the feat&x badge, marked by the real find widget when the mark is the target
+    loadParityCommits(entry.placement);
+    if (entry.marked) await searchFor(SPECIAL_NAME);
+    const { badge } = parityBadge(entry.placement, SPECIAL_NAME_SELECTOR);
+    expect(badge.dataset.name).toBe(SPECIAL_NAME);
+    const target = entry.pick(badge);
+
+    // When: the child element is double-clicked
+    const bubbles = doubleClick(target);
+
+    // Then: one local checkout with the dataset name, not a re-read of the displayed text
+    expect(postedPayloads()).toEqual([localCheckout(SPECIAL_NAME)]);
+    expect(checkoutCalls()).toHaveLength(1);
+    expect(checkoutCalls()[0][1]).toBe(badge);
+    expect(checkoutCalls()[0][2]).toBe(SPECIAL_NAME);
+    expectNoCheckoutDialog();
+    expectIsolated(bubbles);
+  });
+
+  it.each([
+    {
+      label: "the current branch main in the row",
+      placement: "row" as Placement,
+      selector: CURRENT_BRANCH_SELECTOR,
+      name: CURRENT_BRANCH
+    },
+    {
+      label: "the worktree branch feature/x in the row",
+      placement: "row" as Placement,
+      selector: LOCAL_FEATURE_SELECTOR,
+      name: LOCAL_FEATURE
+    },
+    {
+      label: "the worktree branch feature/x in the list",
+      placement: "list" as Placement,
+      selector: LOCAL_FEATURE_SELECTOR,
+      name: LOCAL_FEATURE
+    }
+  ])("checks out $label without a UI-side exclusion (TC-773)", (entry) => {
+    // Case: TC-773 (AC-04)
+    // Given: the badge of the current branch (.active) or of a linked worktree branch
+    loadParityCommits(entry.placement);
+    const { badge } = parityBadge(entry.placement, entry.selector);
+    if (entry.name === CURRENT_BRANCH) expect(badge.classList.contains("active")).toBe(true);
+    else expect(badge.dataset.worktreePath).toBe(MENU_WORKTREES.branches[LOCAL_FEATURE].path);
+
+    // When: it is double-clicked
+    const bubbles = doubleClick(badge);
+
+    // Then: the existing action ran once and one local request was sent; no confirmation
+    expect(checkoutCalls()).toHaveLength(1);
+    expect(checkoutCalls()[0]).toHaveLength(3);
+    expect(checkoutCalls()[0][0]).toBe(TEST_REPO);
+    expect(checkoutCalls()[0][1]).toBe(badge);
+    expect(checkoutCalls()[0][2]).toBe(entry.name);
+    expect(postedPayloads()).toEqual([localCheckout(entry.name)]);
+    expect(dialogs.showConfirmationDialog).not.toHaveBeenCalled();
+    expectNoCheckoutDialog();
+    expectIsolated(bubbles);
+  });
+
+  it.each(PLACEMENTS)(
+    "runs the action for a tag without a checkout from the %s (TC-774)",
+    (placement) => {
+      // Case: TC-774 (AC-05)
+      // Given: the v1.0 tag badge
+      loadParityCommits(placement);
+      const { badge } = parityBadge(placement, TAG_SELECTOR);
+
+      // When: it is double-clicked
+      const bubbles = doubleClick(badge);
+
+      // Then: the real action got the badge with three arguments, but requested nothing
+      expect(checkoutCalls()).toHaveLength(1);
+      expect(checkoutCalls()[0]).toHaveLength(3);
+      expect(checkoutCalls()[0][1]).toBe(badge);
+      expect(checkoutCalls()[0][2]).toBe(TAG_NAME);
+      expect(checkoutCalls()[0][3]).toBeUndefined();
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+      expectNoCheckoutDialog();
+      expect(bubbles).toEqual({ row: 0, document: 0 });
+    }
+  );
+
+  it.each(PLACEMENTS)(
+    "runs the action for a stash without a checkout from the %s (TC-775)",
+    (placement) => {
+      // Case: TC-775 (AC-05)
+      // Given: the stash label of row 2
+      loadParityCommits(placement);
+      const { badge, list } = parityBadge(placement, STASH_LABEL_SELECTOR, PARITY_STASH_ROW);
+
+      // When: it is double-clicked
+      const bubbles = doubleClick(badge, PARITY_STASH_ROW);
+
+      // Then: the real action got the label (the clone in the list) and requested nothing
+      expect(checkoutCalls()).toHaveLength(1);
+      expect(checkoutCalls()[0]).toHaveLength(3);
+      expect(checkoutCalls()[0][1]).toBe(badge);
+      expect(checkoutCalls()[0][2]).toBeUndefined();
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+      expectNoCheckoutDialog();
+      expect(bubbles).toEqual({ row: 0, document: 0 });
+      if (list !== null) expect(popups()).toEqual([list]);
+    }
+  );
+
+  it.each(PLACEMENTS)("ignores a detached worktree from the %s (TC-776)", (placement) => {
+    // Case: TC-776 (AC-05)
+    // Given: the detached worktree badge
+    loadParityCommits(placement);
+    const { badge } = parityBadge(placement, DETACHED_SELECTOR);
+
+    // When: it is double-clicked
+    const bubbles = doubleClick(badge);
+
+    // Then: the action never ran, nothing was requested, no dialog, and the event stayed inside
+    expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+    expectNoCheckoutDialog();
+    expect(bubbles).toEqual({ row: 0, document: 0 });
+  });
+
+  it.each(PLACEMENTS)(
+    "sends nothing when the remote name dialog is cancelled from the %s (TC-777)",
+    (placement) => {
+      // Case: TC-777 (AC-06)
+      // Given: the name dialog opened from the origin part
+      loadParityCommits(placement);
+      const { badge } = parityBadge(placement, LOCAL_FEATURE_SELECTOR);
+      doubleClick(remotePart(badge, ORIGIN_REMOTE));
+      expectCheckoutInputDialog(LOCAL_FEATURE);
+
+      // When: it is cancelled
+      clickDialogButton("dialogDismiss");
+
+      // Then: no request and the dialog is closed
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+      expect(dialogs.isDialogActive()).toBe(false);
+    }
+  );
+
+  it.each(PLACEMENTS)("cannot confirm an empty remote name from the %s (TC-778)", (placement) => {
+    // Case: TC-778 (AC-06)
+    // Given: the name dialog opened from the origin part
+    loadParityCommits(placement);
+    const { badge } = parityBadge(placement, LOCAL_FEATURE_SELECTOR);
+    doubleClick(remotePart(badge, ORIGIN_REMOTE));
+    expectCheckoutInputDialog(LOCAL_FEATURE);
+
+    // When: the name is cleared and the action is attempted
+    typeDialogInput("");
+    expect(dialogActionButton().disabled).toBe(true);
+    expect(dialogElem().classList.contains(NO_INPUT_CLASS)).toBe(true);
+    clickDialogButton(DIALOG_ACTION_ID);
+
+    // Then: no request
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(PLACEMENTS)("cannot confirm an invalid remote name from the %s (TC-779)", (placement) => {
+    // Case: TC-779 (AC-06)
+    // Given: the name dialog opened from the origin part
+    loadParityCommits(placement);
+    const { badge } = parityBadge(placement, LOCAL_FEATURE_SELECTOR);
+    doubleClick(remotePart(badge, ORIGIN_REMOTE));
+    expectCheckoutInputDialog(LOCAL_FEATURE);
+
+    // When: bad..name is typed and the action is attempted
+    typeDialogInput(INVALID_REF_NAME);
+    expect(dialogActionButton().disabled).toBe(true);
+    expect(dialogElem().classList.contains(INPUT_INVALID_CLASS)).toBe(true);
+    clickDialogButton(DIALOG_ACTION_ID);
+
+    // Then: no request
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(
+    withPlacements([
+      { kind: "local" as CheckoutKind, selector: LOCAL_FEATURE_SELECTOR, rowIndex: PARITY_ROW },
+      { kind: "remote" as CheckoutKind, selector: LOCAL_FEATURE_SELECTOR, rowIndex: PARITY_ROW },
+      { kind: "tag" as CheckoutKind, selector: TAG_SELECTOR, rowIndex: PARITY_ROW },
+      { kind: "stash" as CheckoutKind, selector: STASH_LABEL_SELECTOR, rowIndex: PARITY_STASH_ROW },
+      { kind: "detached" as CheckoutKind, selector: DETACHED_SELECTOR, rowIndex: PARITY_ROW }
+    ])
+  )(
+    "closes the dialog, then the menu, before resolving a $kind target from the $placement (TC-780)",
+    (entry) => {
+      // Case: TC-780 (AC-05, AC-06)
+      // Given: a menu opened from the target and a confirmation dialog on top of it
+      loadParityCommits(entry.placement);
+      const { badge } = parityBadge(entry.placement, entry.selector, entry.rowIndex);
+      fire(badge, "contextmenu");
+      expect(contextMenu.isContextMenuActive()).toBe(true);
+      dialogs.showConfirmationDialog(CONFIRMATION_MESSAGE, () => {}, null);
+      expect(dialogs.isDialogActive()).toBe(true);
+      vi.clearAllMocks();
+      const target = entry.kind === "remote" ? remotePart(badge, ORIGIN_REMOTE) : badge;
+
+      // When: the target is double-clicked
+      doubleClick(target, entry.rowIndex);
+
+      // Then: the dialog was hidden once, then the menu once, and both are closed
+      expect(dialogs.hideDialog).toHaveBeenCalledTimes(1);
+      expect(contextMenu.hideContextMenu).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(dialogs.hideDialog).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(contextMenu.hideContextMenu).mock.invocationCallOrder[0]
+      );
+      expect(contextMenu.isContextMenuActive()).toBe(false);
+
+      // And: the target resolved as in the row (§3.4)
+      switch (entry.kind) {
+        case "local":
+          expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)]);
+          expectNoCheckoutDialog();
+          break;
+        case "remote":
+          // The confirmation dialog had no input, so the input proves the new dialog replaced it.
+          expectCheckoutInputDialog(LOCAL_FEATURE);
+          break;
+        case "tag":
+        case "stash":
+          expect(checkoutCalls()).toHaveLength(1);
+          expect(vscode.postMessage).not.toHaveBeenCalled();
+          expectNoCheckoutDialog();
+          break;
+        case "detached":
+          expect(refMenu.checkoutBranchAction).not.toHaveBeenCalled();
+          expect(vscode.postMessage).not.toHaveBeenCalled();
+          expectNoCheckoutDialog();
+          break;
+      }
+    }
+  );
+
+  it("keeps the same list right after a listed local checkout request (TC-781)", () => {
+    // Case: TC-781 (AC-08)
+    // Given: the list with feature/x
+    loadParityCommits("list");
+    const { badge: clone, list } = parityBadge("list", LOCAL_FEATURE_SELECTOR);
+    const counter = requireElement(
+      descriptionCell(PARITY_ROW).querySelector(COUNTER_SELECTOR),
+      "counter"
+    );
+
+    // When: the clone is double-clicked
+    doubleClick(clone);
+
+    // Then: the request went out and the very same list element is still open
+    expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)]);
+    expect(popups()).toHaveLength(1);
+    expect(popups()[0]).toBe(list);
+    expect(list!.isConnected).toBe(true);
+    expect(clone.isConnected).toBe(true);
+    expect(counter.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("keeps the same list while the remote name dialog is open and after its cancel (TC-782)", () => {
+    // Case: TC-782 (AC-08)
+    // Given: the list with feature/x | origin | upstream
+    loadParityCommits("list");
+    const { badge: clone, list } = parityBadge("list", LOCAL_FEATURE_SELECTOR);
+
+    // When: the origin part opens the name dialog
+    doubleClick(remotePart(clone, ORIGIN_REMOTE));
+    expectCheckoutInputDialog(LOCAL_FEATURE);
+
+    // Then: the same list stays open under the dialog
+    expect(popups()).toHaveLength(1);
+    expect(popups()[0]).toBe(list);
+
+    // When: the dialog is cancelled with Escape (a click on its Cancel button is an outside
+    // click that closes the list by the pre-existing rule, web/refOverflow-test.md S4 TC-073)
+    pressEscapeOn(dialogInput());
+
+    // Then: still the same list, nothing requested
+    expect(dialogs.isDialogActive()).toBe(false);
+    expect(popups()).toHaveLength(1);
+    expect(popups()[0]).toBe(list);
+    expect(vscode.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("closes the list through the forceRender table replacement after a completed checkout (TC-783)", () => {
+    // Case: TC-783 (AC-08)
+    // Given: a listed local checkout request sent from an idle view
+    loadParityCommits("list");
+    settleParityLoads();
+    const { badge: clone, list } = parityBadge("list", LOCAL_FEATURE_SELECTOR);
+    doubleClick(clone);
+    expect(postedPayloads()).toEqual([localCheckout(LOCAL_FEATURE)]);
+    expect(popups()[0]).toBe(list);
+    vi.clearAllMocks();
+
+    // When: the host reports success and the forced branch and commit responses arrive
+    dispatchMessage({ command: "checkoutBranch", kind: "completed", status: null });
+    expect(postedMessages("loadBranches")).toEqual([expect.objectContaining({ hard: true })]);
+    loadBranchesResponse(true);
+    expect(postedMessages("loadCommits")).toEqual([expect.objectContaining({ hard: true })]);
+    loadCommits({ commits: parityCommits(), worktrees: MENU_WORKTREES, hard: true });
+
+    // Then: the replaced table dropped the list and its clone; no dialog handling was involved
+    expect(popups()).toHaveLength(0);
+    expect(list!.isConnected).toBe(false);
+    expect(clone.isConnected).toBe(false);
+    const counter = requireElement(
+      descriptionCell(PARITY_ROW).querySelector(COUNTER_SELECTOR),
+      "counter"
+    );
+    expect(counter.getAttribute("aria-expanded")).not.toBe("true");
+    expect(dialogs.hideDialog).not.toHaveBeenCalled();
+    expect(dialogs.isDialogActive()).toBe(false);
   });
 });

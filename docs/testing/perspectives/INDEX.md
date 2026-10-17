@@ -1,10 +1,10 @@
 # Test Perspectives Index
 
-> Auto-generated: 2026-10-08T20:12:40+09:00
+> Auto-generated: 2026-10-17T08:29:57+09:00
 > Total sources: 58
 > Total physical files: 104
-> Total sections: 615
-> Total cases: 3691
+> Total sections: 616
+> Total cases: 3715
 
 ## Source File -> Perspectives (Forward Lookup)
 
@@ -56,14 +56,14 @@
 | `web/i18n.ts` | single-file | `web/i18n-test.md` | 1 | 3 | 11 | 2026-10-03 |
 | `web/keyboardNavigation.ts` | single-file | `web/keyboardNavigation-test.md` | 1 | 4 | 54 | 2026-10-07 |
 | `web/main.ts` | single-file | `archive/web/main-test/2026-03-22-pre-sharding-main-test.md` | 1 | 35 | 201 | 2026-03-12 |
-| `web/main.ts` | sharded | `web/main-test/INDEX.md` | 19 | 60 | 434 | 2026-10-08 |
+| `web/main.ts` | sharded | `web/main-test/INDEX.md` | 19 | 61 | 450 | 2026-10-17 |
 | `web/messageHandler.ts` | single-file | `archive/web/messageHandler-test/2026-08-06-pre-sharding-messageHandler-test.md` | 1 | 12 | 41 | 2026-08-04 |
 | `web/messageHandler.ts` | sharded | `web/messageHandler-test/INDEX.md` | 5 | 17 | 67 | 2026-09-29 |
 | `web/pathHighlight.ts` | single-file | `web/pathHighlight-test.md` | 1 | 3 | 21 | 2026-10-03 |
 | `web/pathHighlightController.ts` | single-file | `web/pathHighlightController-test.md` | 1 | 2 | 17 | 2026-10-07 |
 | `web/refMenu.ts` | single-file | `archive/web/refMenu-test/2026-08-03-pre-sharding-refMenu-test.md` | 1 | 14 | 74 | 2026-07-19 |
 | `web/refMenu.ts` | sharded | `web/refMenu-test/INDEX.md` | 3 | 20 | 102 | 2026-10-03 |
-| `web/refOverflow.ts` | single-file | `web/refOverflow-test.md` | 1 | 5 | 77 | 2026-10-07 |
+| `web/refOverflow.ts` | single-file | `web/refOverflow-test.md` | 1 | 5 | 85 | 2026-10-17 |
 | `web/stashMenu.ts` | single-file | `web/stashMenu-test.md` | 1 | 8 | 30 | 2026-04-30 |
 | `web/uncommittedMenu.ts` | single-file | `web/uncommittedMenu-test.md` | 1 | 1 | 3 | 2026-03-09 |
 | `web/utils.ts` | single-file | `web/utils-test.md` | 1 | 5 | 31 | 2026-08-08 |
@@ -151,6 +151,7 @@
 | Feature 061-05 (light-spec-plan) | `l10n/bundle.l10n-test.md`, `l10n/bundle.l10n.ja-test.md`, `l10n/web/web.l10n.en.json-test.md`, `l10n/web/web.l10n.ja.json-test.md`, `media/dropdown-test.md`, `media/findwidget-test.md`, `media/main-test.md`, `src/gitGraphView-test/INDEX.md`, `web/branchCleanupPanel-test.md`, `web/contextMenu-test.md`, `web/dialogs-test.md`, `web/dropdown-test.md`, `web/fileHistory-test.md`, `web/fileTree-test.md`, `web/findWidget-test.md`, `web/keyboardNavigation-test.md`, `web/main-test/INDEX.md`, `web/pathHighlightController-test.md`, `web/refOverflow-test.md` |
 | Feature 061-05 (light-spec-plan) review fix | `web/contextMenu-test.md`, `web/dialogs-test.md`, `web/main-test/INDEX.md` |
 | Feature 061-05 (light-spec-plan) user follow-up | `web/main-test/INDEX.md` |
+| Feature 061-06 (light-spec-plan) | `web/main-test/INDEX.md`, `web/refOverflow-test.md` |
 | K2 demo-repository-config (light-spec-plan) | `scripts/readme-media/make-demo-repo-test.md` |
 | light-spec-plan notes/features/042/spec.md | `src/avatarManager-test.md` |
 | notes/features/044/memo-対応プラン.md | `web/dialogs-test.md` |

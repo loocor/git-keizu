@@ -2,12 +2,12 @@
 
 > Source: `web/main.ts`
 > Storage Mode: sharded
-> Generated: 2026-10-07T00:00:00Z
+> Generated: 2026-10-17T00:00:00Z
 > Language: TypeScript
 > Test Framework: Vitest
 > Total Shards: 19
-> Total Sections: 60
-> Total Cases: 434
+> Total Sections: 61
+> Total Cases: 450
 
 ## Shards
 
@@ -15,7 +15,7 @@
 | ------------------------------- | ---------------------- | -------- | ----- | ------------ |
 | 01-rendering-01.md              | rendering              | 7        | 35    | 2026-03-05   |
 | 01-rendering-02.md              | rendering              | 0        | 0     | 2026-09-13   |
-| 01-rendering-03.md              | rendering              | 2        | 24    | 2026-09-27   |
+| 01-rendering-03.md              | rendering              | 3        | 40    | 2026-10-17   |
 | 02-context-menu-01.md           | context-menu           | 5        | 40    | 2026-07-04   |
 | 02-context-menu-02.md           | context-menu           | 0        | 0     | 2026-09-25   |
 | 03-compare-find-01.md           | compare-find           | 3        | 25    | 2026-03-01   |
@@ -66,6 +66,7 @@
 | Feature 060-03 addendum (light-spec-plan)                            | 08-request-queue-01.md                                             |
 | Feature 061-01 (light-spec-plan)                                     | 12-path-highlight-01.md                                            |
 | Feature 061-05 (light-spec-plan)                                     | 13-keyboard-accessibility-01.md, 13-keyboard-accessibility-02.md   |
+| Feature 061-06 (light-spec-plan)                                     | 01-rendering-03.md                                                 |
 | フェーズ2 修正 M12 (author-dropdown-merge-options)                   | 05-state-response-02.md                                            |
 | フェーズ2 修正 M12 (author-dropdown-unconditional-rebuild)           | 05-state-response-02.md                                            |
 | フェーズ3 修正 L15 (avatar-raw-email-compare)                        | 05-state-response-02.md                                            |
