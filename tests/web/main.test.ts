@@ -2347,6 +2347,30 @@ describe("GitKeizuView frontend integration", () => {
     });
   });
 
+  describe("setWorktreePath()", () => {
+    function getViewState(): Record<string, unknown> {
+      return (globalThis as Record<string, unknown>).viewState as Record<string, unknown>;
+    }
+
+    it("replaces viewState.worktreePath without disturbing other state", () => {
+      const viewState = getViewState();
+      const reposBefore = viewState.repos;
+      const worktreePath = {
+        template: `~/.worktrees/${"$"}{repoName}/${"$"}{branch}`,
+        homeDir: "/home/dev",
+        platform: "posix"
+      };
+      vi.clearAllMocks();
+
+      dispatchMessage({ command: "setWorktreePath", worktreePath });
+
+      expect(viewState.worktreePath).toEqual(worktreePath);
+      expect(viewState.repos).toBe(reposBefore);
+      expect(vscode.setState).not.toHaveBeenCalled();
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+    });
+  });
+
   /* ---------------------------------------------------------------- */
   /* normalizeCommitLoadCount() helper (web/main-test 07-load-count)  */
   /* ---------------------------------------------------------------- */

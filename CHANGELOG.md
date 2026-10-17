@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Suggested worktree path follows `worktreePathTemplate`**: Create Worktree and Create Worktree Here fill in the path from `git-keizu.worktreePathTemplate`. The default `${repoPath}/../${repoName}-${branch}` still places the worktree beside the repository. `${repoPath}`, `${repoName}`, and `${branch}` expand the same way as in [Better Worktrees](https://github.com/shivanshthapliyal/vscode-better-worktrees): `${branch}` is one directory, a leading `~` is the home directory, a relative template resolves against the repository, an unknown placeholder is left as written, and a blank setting uses the default. The suggestion stays editable. Changing the setting updates an open graph, and Create Worktree Here keeps updating the path as the branch name is typed until the path is edited.
+
 ## [1.7.1] - 2026-10-17
 
 This release makes the **+N** label list behave like the row for checkouts: double-clicking a branch in the list now checks it out, exactly as double-clicking the same label in the row does.

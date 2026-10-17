@@ -126,7 +126,8 @@ vi.mock("../../src/config", () => ({
       stashUncommittedChanges: { includeUntracked: false },
       createWorktree: { openTerminal: true },
       removeWorktree: { deleteBranch: true }
-    })
+    }),
+    worktreePathTemplate: () => `${"$"}{repoPath}/../${"$"}{repoName}-${"$"}{branch}`
   }))
 }));
 
@@ -164,6 +165,7 @@ vi.mock("../../src/utils", () => ({
 }));
 
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve as resolvePath } from "node:path";
 
 import { JSDOM } from "jsdom";
@@ -2821,6 +2823,18 @@ describe("GitKeizuView merge/cherry-pick handler and viewState dialogDefaults (S
     });
   });
 
+  it("includes the worktree path template in viewState", async () => {
+    createPanel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const viewState = parseViewState(getPanelHtml());
+    expect(viewState.worktreePath).toEqual({
+      template: `${"$"}{repoPath}/../${"$"}{repoName}-${"$"}{branch}`,
+      homeDir: homedir(),
+      platform: process.platform === "win32" ? "win32" : "posix"
+    });
+  });
+
   it("includes showRecentActions in viewState from Config (TC-065)", async () => {
     // Case: TC-065
     // Given: config.showRecentActions() returns true in the default mock
@@ -4171,6 +4185,29 @@ describe("GitKeizuView notifyShowRecentActionsChanged runtime sync", () => {
     getConfigMock.mockImplementation(
       () => baseConfig as unknown as ReturnType<typeof configModule.getConfig>
     );
+  });
+
+  it("posts setWorktreePath with the current template without regenerating HTML", async () => {
+    createPanel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    mocks.postMessage.mockClear();
+    const panelMock = vi.mocked(vscode.window.createWebviewPanel).mock.results[0].value as {
+      webview: { html: string };
+    };
+    const htmlBefore = panelMock.webview.html;
+
+    GitKeizuView.currentPanel!.notifyWorktreePathChanged();
+
+    expect(mocks.postMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.postMessage).toHaveBeenCalledWith({
+      command: "setWorktreePath",
+      worktreePath: {
+        template: `${"$"}{repoPath}/../${"$"}{repoName}-${"$"}{branch}`,
+        homeDir: homedir(),
+        platform: process.platform === "win32" ? "win32" : "posix"
+      }
+    });
+    expect(panelMock.webview.html).toBe(htmlBefore);
   });
 });
 
@@ -5602,8 +5639,8 @@ describe("GitKeizuView host HTML toolbar buttons, list name and status notice (S
     "dialogBacking",
     "dialog"
   ];
-  // The git-keizu.* configuration entries at the start of this feature (no new setting keys).
-  const CONFIGURATION_ENTRY_COUNT = 32;
+  // git-keizu.* configuration entries, including worktreePathTemplate.
+  const CONFIGURATION_ENTRY_COUNT = 33;
   const VIEW_STATE_KEYS = [
     "commitOrdering",
     "dateFormat",
@@ -5619,7 +5656,8 @@ describe("GitKeizuView host HTML toolbar buttons, list name and status notice (S
     "mute",
     "repos",
     "showCurrentBranchByDefault",
-    "showRecentActions"
+    "showRecentActions",
+    "worktreePath"
   ];
   let body: HTMLElement;
 
@@ -5740,7 +5778,7 @@ describe("GitKeizuView host HTML toolbar buttons, list name and status notice (S
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("adds no viewState key and no configuration entry (TC-417)", () => {
+  it("includes worktreePath in viewState and worktreePathTemplate in configuration (TC-417)", () => {
     // Case: TC-417 (R6)
     const script = Array.from(body.querySelectorAll("script")).find((element) =>
       element.textContent!.includes("var viewState = ")

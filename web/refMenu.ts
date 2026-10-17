@@ -9,15 +9,9 @@ import {
 import { t } from "./i18n";
 import { buildMergeMenuItem } from "./mergeDialog";
 import { type BranchPathMode, PathHighlightMode } from "./pathHighlight";
-import {
-  ELLIPSIS,
-  escapeHtml,
-  getRepoName,
-  sanitizeBranchNameForPath,
-  sendMessage,
-  svgIcons
-} from "./utils";
+import { ELLIPSIS, escapeHtml, sendMessage, svgIcons } from "./utils";
 import { buildWorktreeActionItems } from "./worktreeMenu";
+import { suggestedWorktreePath } from "./worktreeSuggestion";
 
 export interface ParsedRemoteRef {
   remoteName: string;
@@ -285,15 +279,13 @@ export function buildRefContextMenuItems(
             title: `${t("Create Worktree")}${ELLIPSIS}`,
             recentActionId: "ref.createWorktree",
             onClick: () => {
-              const repoName = getRepoName(repo);
-              const defaultPath = `../${repoName}-${sanitizeBranchNameForPath(refName)}`;
               showFormDialog(
                 t("Create worktree for branch {0}:", `<b><i>${escapeHtml(refName)}</i></b>`),
                 [
                   {
                     type: "text" as const,
                     name: t("Path: "),
-                    default: defaultPath,
+                    default: suggestedWorktreePath(repo, refName),
                     placeholder: null
                   },
                   {

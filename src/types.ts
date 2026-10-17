@@ -126,6 +126,12 @@ export interface DialogDefaults {
   };
 }
 
+export interface WorktreePathViewState {
+  readonly template: string;
+  readonly homeDir: string;
+  readonly platform: "posix" | "win32";
+}
+
 export interface GitKeizuViewState {
   commitOrdering: CommitOrdering;
   dateFormat: DateFormat;
@@ -142,6 +148,7 @@ export interface GitKeizuViewState {
   repos: GitRepoSet;
   showCurrentBranchByDefault: boolean;
   showRecentActions: boolean;
+  worktreePath: WorktreePathViewState;
 }
 
 export interface GitFileChange {
@@ -529,6 +536,11 @@ export interface ResponseSetShowRecentActions {
   showRecentActions: boolean;
 }
 
+export interface ResponseSetWorktreePath {
+  command: "setWorktreePath";
+  worktreePath: WorktreePathViewState;
+}
+
 export interface RequestRenameBranch {
   command: "renameBranch";
   repo: string;
@@ -870,6 +882,7 @@ export type ResponseMessage =
   | ResponseRemoveWorktree
   | ResponseSelectRepo
   | ResponseSetShowRecentActions
+  | ResponseSetWorktreePath
   | ResponseRenameBranch
   | ResponseResetToCommit
   | ResponseResetUncommitted

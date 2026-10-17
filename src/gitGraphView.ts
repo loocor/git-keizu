@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import { homedir } from "node:os";
 import * as path from "node:path";
 
 import * as vscode from "vscode";
@@ -23,7 +24,8 @@ import {
   type ResponseCheckoutBranch,
   ResponseMessage,
   type ResponsePush,
-  UNCOMMITTED_CHANGES_HASH
+  UNCOMMITTED_CHANGES_HASH,
+  WorktreePathViewState
 } from "./types";
 import { abbrevCommit, copyToClipboard, getPathFromUri, openFile } from "./utils";
 
@@ -36,6 +38,14 @@ const BRANCH_ALREADY_EXISTS_MESSAGE = "A branch with this name already exists.";
 const INVALID_REMOTE_NAME_MESSAGE = "Invalid remote name.";
 const REMOTE_LOOKUP_FAILED_MESSAGE = "Unable to read the remotes of this repository.";
 const UNREGISTERED_REMOTE_MESSAGE = "The selected remote is not registered in this repository.";
+
+function currentWorktreePathViewState(): WorktreePathViewState {
+  return {
+    template: getConfig().worktreePathTemplate(),
+    homeDir: homedir(),
+    platform: process.platform === "win32" ? "win32" : "posix"
+  };
+}
 
 export class GitKeizuView {
   public static currentPanel: GitKeizuView | undefined;
@@ -701,6 +711,13 @@ export class GitKeizuView {
     });
   }
 
+  public notifyWorktreePathChanged() {
+    this.sendMessage({
+      command: "setWorktreePath",
+      worktreePath: currentWorktreePathViewState()
+    });
+  }
+
   private async selectRepoFromUri(rootUri: vscode.Uri, repoManager: RepoManager) {
     const repoPath = getPathFromUri(rootUri);
     const repos = repoManager.getRepos();
@@ -781,7 +798,8 @@ export class GitKeizuView {
       },
       repos: this.repoManager.getRepos(),
       showCurrentBranchByDefault: config.showCurrentBranchByDefault(),
-      showRecentActions: config.showRecentActions()
+      showRecentActions: config.showRecentActions(),
+      worktreePath: currentWorktreePathViewState()
     };
 
     let body,

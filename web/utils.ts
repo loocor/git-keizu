@@ -39,8 +39,6 @@ const htmlEscapes: { [key: string]: string } = {
   "/": "&#x2F;"
 };
 const htmlEscaper = /[&<>"'/]/g;
-const pathUnsafeChars = /[\\/:*?"<>| ]+/g;
-const pathUnsafeCharReplacement = "-";
 export const refInvalid = /^[-/].*|[\\" ><~^:?*[]|\.\.|\/\/|\/\.|@{|[./]$|\.lock$|^@$/;
 export const ELLIPSIS = "&#8230;";
 
@@ -81,10 +79,6 @@ export function pad2(i: number) {
 
 export function escapeHtml(str: string) {
   return str.replace(htmlEscaper, (match) => htmlEscapes[match]);
-}
-
-export function sanitizeBranchNameForPath(branchName: string) {
-  return branchName.replace(pathUnsafeChars, pathUnsafeCharReplacement);
 }
 
 export function addListenerToClass(className: string, event: string, eventListener: EventListener) {

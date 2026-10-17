@@ -887,6 +887,10 @@ class GitKeizuView {
     viewState.showRecentActions = showRecentActions;
   }
 
+  public setWorktreePath(worktreePath: GG.WorktreePathViewState) {
+    viewState.worktreePath = worktreePath;
+  }
+
   public loadBranchCleanup(response: GG.ResponseLoadBranchCleanup) {
     this.branchCleanupPanel.handleResponse(response);
   }
