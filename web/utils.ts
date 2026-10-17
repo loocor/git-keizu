@@ -27,6 +27,7 @@ export const svgIcons = {
   search: '<span class="codicon codicon-search" aria-hidden="true"></span>',
   stash: '<span class="codicon codicon-git-stash" aria-hidden="true"></span>',
   tag: '<span class="codicon codicon-tag" aria-hidden="true"></span>',
+  trash: '<span class="codicon codicon-trash" aria-hidden="true"></span>',
   treeView: '<span class="codicon codicon-list-tree" aria-hidden="true"></span>',
   worktree: '<span class="codicon codicon-worktree-small" aria-hidden="true"></span>'
 };

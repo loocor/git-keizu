@@ -782,16 +782,18 @@ describe("BranchCleanupPanel row actions", () => {
     );
 
     const buttons = createWorktreeButtons();
-    expect(buttons.map((button) => button.textContent)).toEqual([
+    expect(buttons.map((button) => button.title)).toEqual([
       "Create Worktree...",
       "Create Worktree...",
-      "Create Worktree...",
-      "Create Worktree..."
+      "Create Worktree... (In use: /repo)",
+      "Create Worktree... (In use: /repo/.worktrees/linked)"
     ]);
+    expect(
+      buttons.every((button) => button.querySelector(".codicon-worktree-small") !== null)
+    ).toBe(true);
+    expect(buttons.every((button) => button.textContent === "")).toBe(true);
     expect(buttons.map((button) => button.disabled)).toEqual([false, false, true, true]);
     expect(buttons[0].getAttribute("aria-label")).toBe("Create Worktree...: feature/x");
-    expect(buttons[2].title).toBe("In use: /repo");
-    expect(buttons[3].title).toBe("In use: /repo/.worktrees/linked");
 
     buttons[0].click();
     expect(actions.showCreateWorktreeDialog).toHaveBeenCalledTimes(1);
@@ -1040,8 +1042,12 @@ describe("BranchCleanupPanel keyboard buttons and focus restoration", () => {
     expect(deleteX.getAttribute("aria-label")).toBe(`Delete...: ${BRANCH}`);
     expect(showAB.getAttribute("aria-label")).toBe("Show in Graph: a;b");
     expect(deleteAB.getAttribute("aria-label")).toBe("Delete...: a;b");
-    expect(showX.textContent).toBe("Show in Graph");
-    expect(deleteX.textContent).toBe("Delete...");
+    expect(showX.title).toBe("Show in Graph");
+    expect(deleteX.title).toBe("Delete...");
+    expect(showX.querySelector(".codicon-eye")).not.toBeNull();
+    expect(deleteX.querySelector(".codicon-trash")).not.toBeNull();
+    expect(showX.textContent).toBe("");
+    expect(deleteX.textContent).toBe("");
   });
 
   it("disables delete during a re-request and returns focus to it afterwards (TC-055)", () => {

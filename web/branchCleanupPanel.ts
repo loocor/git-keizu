@@ -9,7 +9,7 @@ import {
   type FocusUpdate,
   markFocusTarget
 } from "./keyboardNavigation";
-import { sendMessage } from "./utils";
+import { sendMessage, svgIcons } from "./utils";
 
 /* === Constants === */
 
@@ -388,7 +388,9 @@ export class BranchCleanupPanel {
       // A branch already checked out in a worktree cannot be added again. A re-request also
       // disables the button: the shown row may be stale, and the button stays in its box.
       btn.disabled = true;
-      if (checkedOut) btn.title = worktreeText(row.worktree);
+      if (checkedOut) {
+        btn.title = `${actionLabel(ACTION_CREATE)} (${worktreeText(row.worktree)})`;
+      }
     } else {
       btn.addEventListener("click", () =>
         this.actions.showCreateWorktreeDialog(repo, row.branchName, btn)
@@ -526,6 +528,17 @@ function actionLabel(action: CleanupAction): string {
   }
 }
 
+function actionIcon(action: CleanupAction): string {
+  switch (action) {
+    case "show":
+      return svgIcons.cdv;
+    case "createWorktree":
+      return svgIcons.worktree;
+    case "delete":
+      return svgIcons.trash;
+  }
+}
+
 function buildActionButton(
   repo: string,
   branchName: string,
@@ -536,7 +549,8 @@ function buildActionButton(
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = className;
-  btn.textContent = label;
+  btn.innerHTML = actionIcon(action);
+  btn.title = label;
   btn.setAttribute(ATTR_ARIA_LABEL, t(ACTION_FOR_KEY, label, branchName));
   btn.dataset.branch = branchName;
   btn.dataset.action = action;
