@@ -216,7 +216,7 @@ These shortcuts run while focus is on a commit row, a label, or the graph backgr
 | `${repoName}` | The repository's directory name                                              |
 | `${branch}`   | The branch, with slashes flattened to hyphens so it stays a single directory |
 
-A leading `~` expands to the home directory, and a relative template resolves against the repository. The default places each worktree beside its repo. To collect them under one directory instead:
+A leading `~` expands to the home directory, and a relative template resolves against the repository. On Windows, a path that names a drive without a root, such as `D:worktrees`, becomes an absolute path using that drive's working directory, or the drive root when the drive has none. The default places each worktree beside its repo. To collect them under one directory instead:
 
 ```json
 "git-keizu.worktreePathTemplate": "~/.worktrees/${repoName}/${branch}"

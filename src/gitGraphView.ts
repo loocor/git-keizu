@@ -28,6 +28,7 @@ import {
   WorktreePathViewState
 } from "./types";
 import { abbrevCommit, copyToClipboard, getPathFromUri, openFile } from "./utils";
+import { windowsDriveDirectories } from "./worktreePath";
 
 const CONFIG_SECTION = "git-keizu";
 const CSS_COLOR_VAR_PREFIX = "--git-keizu-color";
@@ -43,7 +44,9 @@ function currentWorktreePathViewState(): WorktreePathViewState {
   return {
     template: getConfig().worktreePathTemplate(),
     homeDir: homedir(),
-    platform: process.platform === "win32" ? "win32" : "posix"
+    platform: process.platform === "win32" ? "win32" : "posix",
+    cwd: process.cwd(),
+    driveCwd: windowsDriveDirectories(process.env)
   };
 }
 

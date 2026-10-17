@@ -130,6 +130,8 @@ export interface WorktreePathViewState {
   readonly template: string;
   readonly homeDir: string;
   readonly platform: "posix" | "win32";
+  readonly cwd: string;
+  readonly driveCwd: Readonly<Record<string, string>>;
 }
 
 export interface GitKeizuViewState {

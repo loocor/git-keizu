@@ -7,6 +7,8 @@ export function suggestedWorktreePath(repo: string, branch: string): string {
     repoPath: repo,
     branch,
     homeDir: settings?.homeDir ?? "",
-    platform: settings?.platform
+    platform: settings?.platform,
+    cwd: settings?.cwd,
+    driveCwd: settings?.driveCwd
   });
 }

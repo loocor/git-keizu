@@ -23,6 +23,13 @@ export interface WorktreePathVars {
   homeDir: string;
   /** Host path style. Inferred from the paths when omitted. */
   platform?: WorktreePathPlatform;
+  /**
+   * Process working directory. Windows consults this when a template names a
+   * drive without a root, the same way Node's `path.win32.resolve` does.
+   */
+  cwd?: string;
+  /** Drive prefixes such as `D:` mapped to that drive's working directory. */
+  driveCwd?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -47,20 +54,25 @@ export function sanitizeBranchForPath(branch: string): string {
  */
 export function resolveWorktreePath(template: string, vars: WorktreePathVars): string {
   const pathApi = vars.platform === "win32" || inferWin32(vars) ? win32 : posix;
+  const context: Win32ResolveContext = { cwd: vars.cwd, driveCwd: vars.driveCwd };
   const effective = template.trim() || DEFAULT_WORKTREE_PATH_TEMPLATE;
-  const repoPath = pathApi.resolve(vars.repoPath);
+  const repoPath = pathApi.resolve([vars.repoPath], context);
 
-  const values: Record<string, string> = {
-    repoPath,
-    repoName: pathApi.basename(repoPath),
-    branch: sanitizeBranchForPath(vars.branch)
-  };
+  const values = new Map<string, string>([
+    ["repoPath", repoPath],
+    ["repoName", pathApi.basename(repoPath)],
+    ["branch", sanitizeBranchForPath(vars.branch)]
+  ]);
 
   // An unrecognised placeholder is left as written: silently expanding it to
   // nothing would produce a plausible-looking path pointing somewhere else.
-  const expanded = effective.replace(/\$\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
+  // A Map keeps names that live on Object.prototype, such as constructor, written out.
+  const expanded = effective.replace(
+    /\$\{(\w+)\}/g,
+    (match, key: string) => values.get(key) ?? match
+  );
 
-  return pathApi.resolve(repoPath, expandHome(expanded, vars.homeDir, pathApi));
+  return pathApi.resolve([repoPath, expandHome(expanded, vars.homeDir, pathApi)], context);
 }
 
 function inferWin32(vars: WorktreePathVars): boolean {
@@ -74,8 +86,13 @@ function looksLikeWin32(target: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(target) || target.startsWith("\\\\");
 }
 
+interface Win32ResolveContext {
+  cwd?: string;
+  driveCwd?: Readonly<Record<string, string>>;
+}
+
 interface PathApi {
-  resolve(...paths: string[]): string;
+  resolve(paths: readonly string[], context?: Win32ResolveContext): string;
   join(...paths: string[]): string;
   basename(target: string): string;
 }
@@ -104,6 +121,25 @@ function isWindowsDeviceRoot(code: number): boolean {
     (code >= CHAR_UPPERCASE_A && code <= CHAR_UPPERCASE_Z) ||
     (code >= CHAR_LOWERCASE_A && code <= CHAR_LOWERCASE_Z)
   );
+}
+
+/** Reads Windows per-drive working directories (`=C:`, `=D:`, ...) from an environment. */
+export function windowsDriveDirectories(
+  env: Readonly<Record<string, string | undefined>>
+): Record<string, string> {
+  const drives: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (
+      key.length === 3 &&
+      key.charCodeAt(0) === 61 &&
+      key.charCodeAt(2) === CHAR_COLON &&
+      isWindowsDeviceRoot(key.charCodeAt(1)) &&
+      value
+    ) {
+      drives[key.slice(1)] = value;
+    }
+  }
+  return drives;
 }
 
 function normalizeString(
@@ -188,7 +224,7 @@ function isWin32Separator(code: number): boolean {
 }
 
 const posix: PathApi = {
-  resolve(...paths: string[]): string {
+  resolve(paths: readonly string[]): string {
     let resolvedPath = "";
     let resolvedAbsolute = false;
 
@@ -257,16 +293,55 @@ function normalizePosix(path: string): string {
   return isAbsolute ? `/${normalized}` : normalized;
 }
 
+function driveDirectory(device: string, context: Win32ResolveContext): string {
+  const fromDrive = lookupDriveCwd(context.driveCwd, device);
+  const candidate = fromDrive || context.cwd;
+  // Same check as Node's path.win32.resolve: a cwd counts only when it is on
+  // this drive, or when it is not itself a Windows path (so a forward-slash
+  // root is joined onto the drive). Anything else falls back to the drive root.
+  if (
+    candidate === undefined ||
+    (candidate.slice(0, 2).toLowerCase() !== device.toLowerCase() &&
+      candidate.charCodeAt(2) === CHAR_BACKWARD_SLASH)
+  ) {
+    return `${device}\\`;
+  }
+  return candidate;
+}
+
+function lookupDriveCwd(
+  drives: Readonly<Record<string, string>> | undefined,
+  device: string
+): string | undefined {
+  if (drives === undefined) {
+    return undefined;
+  }
+  const wanted = device.toLowerCase();
+  for (const key of Object.keys(drives)) {
+    if (key.toLowerCase() === wanted && drives[key]) {
+      return drives[key];
+    }
+  }
+  return undefined;
+}
+
 const win32: PathApi = {
-  resolve(...paths: string[]): string {
+  resolve(paths: readonly string[], context: Win32ResolveContext = {}): string {
     let resolvedDevice = "";
     let resolvedTail = "";
     let resolvedAbsolute = false;
 
-    for (let i = paths.length - 1; i >= 0; i--) {
-      const path = paths[i];
-      if (path.length === 0) {
-        continue;
+    for (let i = paths.length - 1; i >= -1; i--) {
+      let path: string;
+      if (i >= 0) {
+        path = paths[i];
+        if (path.length === 0) {
+          continue;
+        }
+      } else if (resolvedDevice.length === 0) {
+        break;
+      } else {
+        path = driveDirectory(resolvedDevice, context);
       }
 
       const len = path.length;

@@ -177,6 +177,7 @@ import type { ExtensionState } from "../../src/extensionState";
 import { GitKeizuView } from "../../src/gitGraphView";
 import type { RepoManager } from "../../src/repoManager";
 import { UNCOMMITTED_CHANGES_HASH } from "../../src/types";
+import { windowsDriveDirectories } from "../../src/worktreePath";
 
 const TEST_REPO = "/test/repo";
 
@@ -2831,7 +2832,9 @@ describe("GitKeizuView merge/cherry-pick handler and viewState dialogDefaults (S
     expect(viewState.worktreePath).toEqual({
       template: `${"$"}{repoPath}/../${"$"}{repoName}-${"$"}{branch}`,
       homeDir: homedir(),
-      platform: process.platform === "win32" ? "win32" : "posix"
+      platform: process.platform === "win32" ? "win32" : "posix",
+      cwd: process.cwd(),
+      driveCwd: windowsDriveDirectories(process.env)
     });
   });
 
@@ -4204,7 +4207,9 @@ describe("GitKeizuView notifyShowRecentActionsChanged runtime sync", () => {
       worktreePath: {
         template: `${"$"}{repoPath}/../${"$"}{repoName}-${"$"}{branch}`,
         homeDir: homedir(),
-        platform: process.platform === "win32" ? "win32" : "posix"
+        platform: process.platform === "win32" ? "win32" : "posix",
+        cwd: process.cwd(),
+        driveCwd: windowsDriveDirectories(process.env)
       }
     });
     expect(panelMock.webview.html).toBe(htmlBefore);

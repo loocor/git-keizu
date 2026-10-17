@@ -6,6 +6,7 @@ import {
   DEFAULT_WORKTREE_PATH_TEMPLATE,
   resolveWorktreePath,
   sanitizeBranchForPath,
+  windowsDriveDirectories,
   type WorktreePathPlatform,
   type WorktreePathVars
 } from "../../src/worktreePath";
@@ -25,12 +26,15 @@ function referenceResolve(
 ): string {
   const effective = template.trim() || DEFAULT_WORKTREE_PATH_TEMPLATE;
   const repoPath = pathApi.resolve(vars.repoPath);
-  const values: Record<string, string> = {
-    repoPath,
-    repoName: pathApi.basename(repoPath),
-    branch: sanitizeBranchForPath(vars.branch)
-  };
-  const expanded = effective.replace(/\$\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
+  const values = new Map<string, string>([
+    ["repoPath", repoPath],
+    ["repoName", pathApi.basename(repoPath)],
+    ["branch", sanitizeBranchForPath(vars.branch)]
+  ]);
+  const expanded = effective.replace(
+    /\$\{(\w+)\}/g,
+    (match, key: string) => values.get(key) ?? match
+  );
   return pathApi.resolve(repoPath, expandHome(expanded, vars.homeDir, pathApi));
 }
 
@@ -140,6 +144,14 @@ describe("resolveWorktreePath", () => {
     );
   });
 
+  it("leaves prototype names such as constructor written out", () => {
+    expectTemplate(
+      `${placeholder("repoPath")}/${placeholder("constructor")}/${placeholder("toString")}`,
+      "hotfix",
+      `/home/dev/repos/api/${placeholder("constructor")}/${placeholder("toString")}`
+    );
+  });
+
   it("falls back to the default template when the setting is blank", () => {
     expectTemplate("   ", "hotfix", "/home/dev/repos/api-hotfix");
   });
@@ -174,6 +186,71 @@ describe("resolveWorktreePath", () => {
         referenceResolve(template, vars, nodePath.win32)
       );
     }
+  });
+
+  it("resolves a drive-relative template on another drive the way Node does", () => {
+    const template = `D:worktrees\\${placeholder("branch")}`;
+    const vars: WorktreePathVars = {
+      repoPath: "C:\\src\\repo",
+      branch: "feature",
+      homeDir: "C:\\Users\\dev",
+      platform: "win32",
+      cwd: process.cwd(),
+      driveCwd: windowsDriveDirectories(process.env)
+    };
+    const resolved = resolveWorktreePath(template, vars);
+    expect(resolved).toBe(referenceResolve(template, vars, nodePath.win32));
+    expect(resolved.startsWith("D:\\")).toBe(true);
+  });
+
+  it("uses a drive working directory for a drive-relative template", () => {
+    expect(
+      resolveWorktreePath(`D:worktrees\\${placeholder("branch")}`, {
+        repoPath: "C:\\src\\repo",
+        branch: "feature",
+        homeDir: "C:\\Users\\dev",
+        platform: "win32",
+        cwd: "C:\\Users\\dev",
+        driveCwd: { "D:": "D:\\work\\current" }
+      })
+    ).toBe("D:\\work\\current\\worktrees\\feature");
+  });
+
+  it("uses the drive root when that drive has no working directory", () => {
+    expect(
+      resolveWorktreePath(`D:worktrees\\${placeholder("branch")}`, {
+        repoPath: "C:\\src\\repo",
+        branch: "feature",
+        homeDir: "C:\\Users\\dev",
+        platform: "win32",
+        cwd: "C:\\Users\\dev"
+      })
+    ).toBe("D:\\worktrees\\feature");
+  });
+
+  it("keeps a same-drive relative template under the repository", () => {
+    expect(
+      resolveWorktreePath(`C:worktrees\\${placeholder("branch")}`, {
+        repoPath: "C:\\src\\repo",
+        branch: "feature",
+        homeDir: "C:\\Users\\dev",
+        platform: "win32",
+        cwd: "C:\\Users\\dev"
+      })
+    ).toBe("C:\\src\\repo\\worktrees\\feature");
+  });
+
+  it("matches a drive working directory without regard to letter case", () => {
+    expect(
+      resolveWorktreePath(`d:worktrees\\${placeholder("branch")}`, {
+        repoPath: "C:\\src\\repo",
+        branch: "feature",
+        homeDir: "C:\\Users\\dev",
+        platform: "win32",
+        cwd: "C:\\Users\\dev",
+        driveCwd: { "D:": "D:\\work\\current" }
+      })
+    ).toBe("d:\\work\\current\\worktrees\\feature");
   });
 
   it("uses win32 rules when the repository path is a drive path and platform is omitted", () => {
