@@ -96,6 +96,41 @@ function buildWorktreeWarning(
   return `<br><span class="dialogWarning">${svgIcons.alert} ${t("This branch has an active worktree at {0}. Force deleting will orphan the worktree directory (detached HEAD).", `<b>${escapeHtml(worktreeInfo.path)}</b>`)}</span>`;
 }
 
+export function showCreateWorktreeDialog(
+  repo: string,
+  branchName: string,
+  sourceElem: HTMLElement | null = null
+): void {
+  showFormDialog(
+    t("Create worktree for branch {0}:", `<b><i>${escapeHtml(branchName)}</i></b>`),
+    [
+      {
+        type: "text",
+        name: t("Path: "),
+        default: suggestedWorktreePath(repo, branchName),
+        placeholder: null
+      },
+      {
+        type: "checkbox",
+        name: t("Open Terminal"),
+        value: viewState.dialogDefaults.createWorktree.openTerminal
+      }
+    ],
+    t("Create Worktree"),
+    (values) => {
+      recordRecentAction(repo, "ref.createWorktree");
+      sendMessage({
+        command: "createWorktree",
+        repo: repo,
+        path: values[0],
+        branchName: branchName,
+        openTerminal: values[1] === "checked"
+      });
+    },
+    sourceElem
+  );
+}
+
 export function showDeleteBranchDialog(
   repo: string,
   refName: string,
@@ -278,36 +313,7 @@ export function buildRefContextMenuItems(
         ? {
             title: `${t("Create Worktree")}${ELLIPSIS}`,
             recentActionId: "ref.createWorktree",
-            onClick: () => {
-              showFormDialog(
-                t("Create worktree for branch {0}:", `<b><i>${escapeHtml(refName)}</i></b>`),
-                [
-                  {
-                    type: "text" as const,
-                    name: t("Path: "),
-                    default: suggestedWorktreePath(repo, refName),
-                    placeholder: null
-                  },
-                  {
-                    type: "checkbox" as const,
-                    name: t("Open Terminal"),
-                    value: viewState.dialogDefaults.createWorktree.openTerminal
-                  }
-                ],
-                t("Create Worktree"),
-                (values) => {
-                  recordRecentAction(repo, "ref.createWorktree");
-                  sendMessage({
-                    command: "createWorktree",
-                    repo: repo,
-                    path: values[0],
-                    branchName: refName,
-                    openTerminal: values[1] === "checked"
-                  });
-                },
-                sourceElem
-              );
-            }
+            onClick: () => showCreateWorktreeDialog(repo, refName, sourceElem)
           }
         : null;
 

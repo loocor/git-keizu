@@ -51,7 +51,12 @@ import {
 import { handleMessage, type RefreshMode } from "./messageHandler";
 import type { BranchPathMode, PathHighlightSelection } from "./pathHighlight";
 import { PATH_HIGHLIGHT_BAR_ID, PathHighlightController } from "./pathHighlightController";
-import { buildRefContextMenuItems, checkoutBranchAction, showDeleteBranchDialog } from "./refMenu";
+import {
+  buildRefContextMenuItems,
+  checkoutBranchAction,
+  showCreateWorktreeDialog,
+  showDeleteBranchDialog
+} from "./refMenu";
 import { DESCRIPTION_MIN_WIDTH, RefOverflowController } from "./refOverflow";
 import { buildStashContextMenuItems } from "./stashMenu";
 import { buildUncommittedContextMenuItems } from "./uncommittedMenu";
@@ -482,6 +487,8 @@ class GitKeizuView {
     });
     this.branchCleanupPanel = new BranchCleanupPanel({
       showBranch: (branchName) => this.showBranchInGraph(branchName),
+      showCreateWorktreeDialog: (repo, branchName, sourceElem) =>
+        showCreateWorktreeDialog(repo, branchName, sourceElem),
       showDeleteDialog: (repo, branchName, remotes) =>
         showDeleteBranchDialog(repo, branchName, remotes)
     });

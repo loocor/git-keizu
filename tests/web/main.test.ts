@@ -261,6 +261,7 @@ vi.mock("../../web/branchLabels", () => ({
 vi.mock("../../web/refMenu", () => ({
   buildRefContextMenuItems: vi.fn(() => []),
   checkoutBranchAction: vi.fn(),
+  showCreateWorktreeDialog: vi.fn(),
   showDeleteBranchDialog: vi.fn()
 }));
 
@@ -284,6 +285,11 @@ const { mockBranchCleanupPanelInstance, capturedPanelActions, mockPanelOpen } = 
     capturedPanelActions: {
       ref: null as {
         showBranch: (branchName: string) => void;
+        showCreateWorktreeDialog: (
+          repo: string,
+          branchName: string,
+          sourceElem: HTMLElement
+        ) => void;
         showDeleteDialog: (repo: string, branchName: string, remotes: string[]) => void;
       } | null
     },
@@ -9094,6 +9100,7 @@ describe("expanded commit restore loading resend (S45)", () => {
 describe("Branch cleanup panel wiring (S49)", () => {
   let liveVscode: typeof vscode;
   let freshShowDeleteBranchDialog: ReturnType<typeof vi.fn>;
+  let freshShowCreateWorktreeDialog: ReturnType<typeof vi.fn>;
   let freshGetBranchLabels: ReturnType<typeof vi.mocked<typeof getBranchLabels>>;
   let panelConstructorCallsBefore = 0;
   let panelConstructorCallsAfter = 0;
@@ -9114,6 +9121,9 @@ describe("Branch cleanup panel wiring (S49)", () => {
     const refMenuMod = await import("../../web/refMenu");
     freshShowDeleteBranchDialog = vi.mocked(
       refMenuMod.showDeleteBranchDialog
+    ) as unknown as ReturnType<typeof vi.fn>;
+    freshShowCreateWorktreeDialog = vi.mocked(
+      refMenuMod.showCreateWorktreeDialog
     ) as unknown as ReturnType<typeof vi.fn>;
 
     const branchLabelsMod = await import("../../web/branchLabels");
@@ -9343,6 +9353,14 @@ describe("Branch cleanup panel wiring (S49)", () => {
     // Then: the exported showDeleteBranchDialog runs once with the exact arguments
     expect(freshShowDeleteBranchDialog).toHaveBeenCalledTimes(1);
     expect(freshShowDeleteBranchDialog).toHaveBeenCalledWith("/repo", "feature/x", ["origin"]);
+  });
+
+  it("forwards the create-worktree callback to the exported dialog unchanged", () => {
+    const source = document.createElement("button");
+    capturedPanelActions.ref!.showCreateWorktreeDialog("/repo", "feature/x", source);
+
+    expect(freshShowCreateWorktreeDialog).toHaveBeenCalledTimes(1);
+    expect(freshShowCreateWorktreeDialog).toHaveBeenCalledWith("/repo", "feature/x", source);
   });
 });
 
