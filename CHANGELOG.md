@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-17
+
+This release makes the **+N** label list behave like the row for checkouts: double-clicking a branch in the list now checks it out, exactly as double-clicking the same label in the row does.
+
+### Fixed
+
+- **Double-clicking a branch in the +N list checks it out**: When a commit had more labels than fit in its row and a branch was folded into the **+N** list, double-clicking that branch in the list did nothing, while the same label in the row checked the branch out. The list now runs the same checkout as the row: a local branch is checked out at once, a remote branch — on its own or shown next to a local branch — first asks for the local branch name, and tag, stash, and worktree labels still check out nothing. The list stays open while the checkout starts and closes when the graph refreshes afterwards; a single click, a right-click, `ENTER`, and `SPACE` on a listed label work as before.
+
 ## [1.7.0] - 2026-10-08
 
 This release makes the whole graph view usable from the keyboard: you can move through commits without opening their details, open any label's context menu, and reach every toolbar, Find, commit details, file, dialog, and panel control with `TAB`, `ENTER`, and `SPACE`. Focus returns to where you started after a menu, list, or dialog closes, and the focused control and the current row are always marked on screen.
@@ -698,7 +706,8 @@ This release is a codebase-wide correctness and robustness pass: 32 defects foun
 
 Initial release as Git Keizu — forked from [neo-git-graph](https://github.com/asispts/neo-git-graph) (originally [Git Graph](https://github.com/mhutchie/vscode-git-graph) by mhutchie, MIT).
 
-[Unreleased]: https://github.com/numlia/git-keizu/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/numlia/git-keizu/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/numlia/git-keizu/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/numlia/git-keizu/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/numlia/git-keizu/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/numlia/git-keizu/compare/v1.5.0...v1.5.1
