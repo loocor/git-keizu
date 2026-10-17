@@ -957,10 +957,13 @@ li.gitFile[tabindex]:focus-visible {
 #branchCleanupPanel td.branchCleanupActionCell {
   position: sticky;
   right: 0;
+  white-space: nowrap;
   background-color: var(--vscode-editor-background);
 }
-.branchCleanupActionBtn {
+/* Beats the later `.roundedBtn { display: block }`, which would stack these icons. */
+button.branchCleanupActionBtn {
   display: inline-flex;
+  vertical-align: middle;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;

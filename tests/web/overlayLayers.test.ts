@@ -380,7 +380,9 @@ describe("media/main.css branch cleanup panel layout (S2)", () => {
     expect(headerBlock).toContain("position: sticky;");
     expect(headerBlock).toContain("background-color: var(--vscode-");
     expect(actionBlock).toContain("position: sticky;");
+    expect(actionBlock).toContain("white-space: nowrap;");
     expect(actionBlock).toContain("background-color: var(--vscode-");
+    expect(ruleBlock(mainCss, "button.branchCleanupActionBtn")).toContain("display: inline-flex;");
   });
 
   it("keeps the 055-02 z-index layer contract untouched (TC-025)", () => {
